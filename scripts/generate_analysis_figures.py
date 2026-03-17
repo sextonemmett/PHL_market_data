@@ -11,7 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 
 DATASETS = {
     "reserve": {
@@ -55,7 +55,6 @@ def configure_matplotlib() -> None:
 
 def save_figure(fig: plt.Figure, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.tight_layout()
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
 
@@ -70,6 +69,7 @@ def load_data() -> dict[str, pd.DataFrame]:
         frame = pd.read_parquet(config["parquet"]).copy()
         frame["RUN_DATE"] = frame["RUN_TIME"].dt.normalize()
         frame["SLOT"] = frame["RUN_TIME"].dt.hour * 12 + frame["RUN_TIME"].dt.minute // 5
+        frame["SLOT_15M"] = frame["RUN_TIME"].dt.hour * 4 + frame["RUN_TIME"].dt.minute // 15
         data[name] = frame
     return data
 
@@ -208,7 +208,11 @@ def plot_regional_daily_heatmaps(
     fig, axes = plt.subplots(2, 1, figsize=(13, 5.6), sharex=False)
     global_min = min(reserve_daily["mean_price"].min(), mp_daily["mean_price"].min())
     global_max = max(reserve_daily["mean_price"].max(), mp_daily["mean_price"].max())
-    cmap = LinearSegmentedColormap.from_list("white_red", ["#ffffff", "#b30000"])
+    cmap = LinearSegmentedColormap.from_list(
+        "green_white_red",
+        [(0.0, "#0b5d1e"), (0.5, "#ffffff"), (1.0, "#8b0000")],
+    )
+    norm = TwoSlopeNorm(vmin=global_min, vcenter=0.0, vmax=global_max)
 
     image = None
     for ax, (dataset_name, frame) in zip(axes, [("reserve", reserve_daily), ("mp", mp_daily)]):
@@ -218,7 +222,7 @@ def plot_regional_daily_heatmaps(
             .astype(float)
         )
         dates = pd.to_datetime(pivot.columns)
-        image = ax.imshow(pivot.values, aspect="auto", cmap=cmap, vmin=global_min, vmax=global_max)
+        image = ax.imshow(pivot.values, aspect="auto", cmap=cmap, norm=norm)
         ax.set_yticks(range(len(pivot.index)))
         ax.set_yticklabels(pivot.index)
         tick_positions = np.linspace(0, len(dates) - 1, min(10, len(dates)), dtype=int)
@@ -319,68 +323,317 @@ def plot_setter_interaction_scatter(
     save_figure(fig, output_path)
 
 
-def plot_mp_intraday_spaghetti(mp: pd.DataFrame, output_path: Path) -> None:
-    daily_slot = (
-        mp.groupby(["RUN_DATE", "SLOT"], observed=True)
+def plot_mp_intraday_percentiles(mp: pd.DataFrame, output_path: Path) -> None:
+    slot_stats = (
+        mp.groupby(["RUN_DATE", "SLOT_15M"], observed=True)
         .agg(mean_price=("MARGINAL_PRICE", "mean"))
         .reset_index()
-    )
-    dates = sorted(daily_slot["RUN_DATE"].unique())
-    color_map = plt.get_cmap("viridis")
-    colors = color_map(np.linspace(0.08, 0.95, len(dates)))
-
-    fig, ax = plt.subplots(figsize=(13, 5.5))
-    for color, run_date in zip(colors, dates):
-        frame = daily_slot[daily_slot["RUN_DATE"] == run_date]
-        ax.plot(frame["SLOT"], frame["mean_price"], color=color, alpha=0.23, linewidth=1.0)
-
-    median_line = (
-        daily_slot.groupby("SLOT", observed=True)["mean_price"]
-        .median()
+        .groupby("SLOT_15M", observed=True)["mean_price"]
+        .quantile([0.10, 0.25, 0.50, 0.75, 0.90])
+        .unstack()
         .reset_index()
+        .rename(columns={0.10: "p10", 0.25: "p25", 0.50: "p50", 0.75: "p75", 0.90: "p90"})
     )
-    ax.plot(median_line["SLOT"], median_line["mean_price"], color="#111827", linewidth=2.5, label="Median day")
-    ax.set_title("MP Intraday Shape: One Mean Price Line per Day")
-    ax.set_xlabel("5-Minute Slot in Day")
-    ax.set_ylabel("Average MP Price")
-    ax.set_xticks(np.arange(0, 289, 24))
-    ax.set_xticklabels([f"{int(slot // 12):02d}:00" for slot in np.arange(0, 289, 24)])
-    ax.legend(frameon=False)
+    fig, ax = plt.subplots(figsize=(13, 5.8))
+    outer = ax.fill_between(
+        slot_stats["SLOT_15M"],
+        slot_stats["p10"],
+        slot_stats["p90"],
+        color="#fdd0a2",
+        alpha=0.45,
+        label="10-90 percentile",
+    )
+    inner = ax.fill_between(
+        slot_stats["SLOT_15M"],
+        slot_stats["p25"],
+        slot_stats["p75"],
+        color="#fc8d59",
+        alpha=0.6,
+        label="25-75 percentile",
+    )
+    median_line, = ax.plot(
+        slot_stats["SLOT_15M"],
+        slot_stats["p50"],
+        color="#7f0000",
+        linewidth=2.5,
+        label="50 percentile",
+    )
+    ax.plot(slot_stats["SLOT_15M"], slot_stats["p90"], color="#b30000", linewidth=1.0, alpha=0.8, linestyle="--")
+    ax.plot(slot_stats["SLOT_15M"], slot_stats["p10"], color="#b30000", linewidth=1.0, alpha=0.8, linestyle="--")
+    ax.set_title("Marginal Price Percentiles", fontsize=16)
+    ax.set_ylabel("Marginal Price", fontsize=13)
+    ax.set_xticks(np.arange(0, 97, 8))
+    ax.set_xticklabels([f"{int(slot // 4):02d}:00" for slot in np.arange(0, 97, 8)], fontsize=12)
+    ax.tick_params(axis="x", labelsize=12)
+    ax.tick_params(axis="y", labelsize=12)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.0f}"))
+    ax.legend(
+        [outer, inner, median_line],
+        ["10-90 percentile", "25-75 percentile", "50 percentile"],
+        frameon=False,
+        ncol=3,
+        fontsize=12,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.12),
+    )
+    fig.tight_layout(rect=(0, 0.08, 1, 0.96))
     save_figure(fig, output_path)
 
 
-def plot_mp_intraday_spaghetti_by_region(mp: pd.DataFrame, output_path: Path) -> None:
-    regional = (
-        mp.groupby(["REGION_NAME", "RUN_DATE", "SLOT"], observed=True)
+def plot_mp_intraday_region_medians(mp: pd.DataFrame, output_path: Path) -> None:
+    region_stats = (
+        mp.groupby(["REGION_NAME", "RUN_DATE", "SLOT_15M"], observed=True)
         .agg(mean_price=("MARGINAL_PRICE", "mean"))
         .reset_index()
+        .groupby(["REGION_NAME", "SLOT_15M"], observed=True)["mean_price"]
+        .median()
+        .reset_index(name="p50_region")
     )
-    dates = sorted(regional["RUN_DATE"].unique())
-    color_map = plt.get_cmap("plasma")
-    colors = color_map(np.linspace(0.08, 0.95, len(dates)))
+    region_labels = {"CLUZ": "Luzon", "CVIS": "Visayas", "CMIN": "Mindanao"}
+    region_styles = {
+        "CLUZ": {"color": "#1f77b4", "linestyle": "-", "linewidth": 2.4},
+        "CVIS": {"color": "#2ca02c", "linestyle": "-", "linewidth": 2.4},
+        "CMIN": {"color": "#9467bd", "linestyle": "-", "linewidth": 2.4},
+    }
+
+    fig, ax = plt.subplots(figsize=(13, 5.8))
+    region_handles = []
+    for region in sorted(region_stats["REGION_NAME"].astype(str).unique()):
+        region_frame = region_stats[region_stats["REGION_NAME"].astype(str) == region]
+        style = region_styles.get(region, {"color": "#444444", "linestyle": "-", "linewidth": 2.2})
+        region_line, = ax.plot(
+            region_frame["SLOT_15M"],
+            region_frame["p50_region"],
+            color=style["color"],
+            linewidth=style["linewidth"],
+            linestyle=style["linestyle"],
+            label=region_labels.get(region, region),
+        )
+        region_handles.append(region_line)
+
+    ax.set_title("Regional Median Marginal Prices", fontsize=16)
+    ax.set_ylabel("Marginal Price", fontsize=13)
+    ax.set_xticks(np.arange(0, 97, 8))
+    ax.set_xticklabels([f"{int(slot // 4):02d}:00" for slot in np.arange(0, 97, 8)], fontsize=12)
+    ax.tick_params(axis="x", labelsize=12)
+    ax.tick_params(axis="y", labelsize=12)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.0f}"))
+    ax.legend(
+        region_handles,
+        [handle.get_label() for handle in region_handles],
+        frameon=False,
+        ncol=3,
+        fontsize=12,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.12),
+    )
+    fig.tight_layout(rect=(0, 0.08, 1, 0.96))
+    save_figure(fig, output_path)
+
+
+def plot_mp_intraday_percentiles_by_region(
+    mp: pd.DataFrame,
+    output_path: Path,
+    slot_min: int | None = None,
+    slot_max: int | None = None,
+    title: str = "Marginal Price Percentiles by Region",
+) -> None:
+    regional = (
+        mp.groupby(["REGION_NAME", "RUN_DATE", "SLOT_15M"], observed=True)
+        .agg(mean_price=("MARGINAL_PRICE", "mean"))
+        .reset_index()
+        .groupby(["REGION_NAME", "SLOT_15M"], observed=True)["mean_price"]
+        .quantile([0.10, 0.25, 0.50, 0.75, 0.90])
+        .unstack()
+        .reset_index()
+        .rename(columns={0.10: "p10", 0.25: "p25", 0.50: "p50", 0.75: "p75", 0.90: "p90"})
+    )
+    if slot_min is not None:
+        regional = regional[regional["SLOT_15M"] >= slot_min]
+    if slot_max is not None:
+        regional = regional[regional["SLOT_15M"] <= slot_max]
 
     regions = sorted(regional["REGION_NAME"].astype(str).unique())
     fig, axes = plt.subplots(len(regions), 1, figsize=(13, 9), sharex=True)
     if len(regions) == 1:
         axes = [axes]
 
+    fill_outer = "#fdd0a2"
+    fill_inner = "#fc8d59"
+    line_color = "#7f0000"
+    region_labels = {"CLUZ": "Luzon", "CVIS": "Visayas", "CMIN": "Mindanao"}
+    y_min = float(regional["p10"].min())
+    y_max = float(regional["p90"].max())
+    handles = None
+
     for ax, region in zip(axes, regions):
         region_frame = regional[regional["REGION_NAME"].astype(str) == region]
-        for color, run_date in zip(colors, dates):
-            frame = region_frame[region_frame["RUN_DATE"] == run_date]
-            ax.plot(frame["SLOT"], frame["mean_price"], color=color, alpha=0.18, linewidth=0.9)
-        median_line = (
-            region_frame.groupby("SLOT", observed=True)["mean_price"]
-            .median()
-            .reset_index()
+        outer = ax.fill_between(
+            region_frame["SLOT_15M"],
+            region_frame["p10"],
+            region_frame["p90"],
+            color=fill_outer,
+            alpha=0.45,
+            label="10-90 percentile",
         )
-        ax.plot(median_line["SLOT"], median_line["mean_price"], color="#111827", linewidth=2.0)
-        ax.set_title(f"MP Intraday Shape by Region: {region}")
-        ax.set_ylabel("Mean Price")
+        inner = ax.fill_between(
+            region_frame["SLOT_15M"],
+            region_frame["p25"],
+            region_frame["p75"],
+            color=fill_inner,
+            alpha=0.55,
+            label="25-75 percentile",
+        )
+        median_line, = ax.plot(
+            region_frame["SLOT_15M"],
+            region_frame["p50"],
+            color=line_color,
+            linewidth=2.0,
+            label="50 percentile",
+        )
+        ax.set_ylabel(
+            region_labels.get(region, region),
+            rotation=0,
+            ha="right",
+            va="center",
+            labelpad=36,
+            fontsize=13,
+        )
+        ax.set_ylim(y_min, y_max)
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.0f}"))
+        ax.tick_params(axis="y", labelsize=12)
+        if handles is None:
+            handles = [outer, inner, median_line]
 
-    axes[-1].set_xlabel("5-Minute Slot in Day")
-    axes[-1].set_xticks(np.arange(0, 289, 24))
-    axes[-1].set_xticklabels([f"{int(slot // 12):02d}:00" for slot in np.arange(0, 289, 24)])
+    tick_start = int(regional["SLOT_15M"].min())
+    tick_end = int(regional["SLOT_15M"].max())
+    tick_step = 4 if (tick_end - tick_start) <= 56 else 8
+    ticks = np.arange(tick_start, tick_end + 1, tick_step)
+    axes[-1].set_xticks(ticks)
+    axes[-1].set_xticklabels([f"{int(slot // 4):02d}:{int((slot % 4) * 15):02d}" for slot in ticks], fontsize=12)
+    axes[-1].tick_params(axis="x", labelsize=12)
+    fig.suptitle(title, fontsize=16, y=0.98)
+    fig.legend(
+        handles,
+        ["10-90 percentile", "25-75 percentile", "50 percentile"],
+        loc="lower center",
+        ncol=3,
+        frameon=False,
+        bbox_to_anchor=(0.5, 0.01),
+        fontsize=12,
+    )
+    fig.tight_layout(rect=(0, 0.08, 1, 0.95))
+    save_figure(fig, output_path)
+
+
+def plot_reserve_intraday_percentiles_by_product(
+    reserve: pd.DataFrame,
+    output_path: Path,
+    slot_min: int | None = None,
+    slot_max: int | None = None,
+    title: str = "Reserve Price Percentiles by Region and Product",
+) -> None:
+    region_order = ["CLUZ", "CVIS", "CMIN"]
+    region_labels = {"CLUZ": "Luzon", "CVIS": "Visayas", "CMIN": "Mindanao"}
+    product_order = ["Dr", "Fr", "Rd", "Ru"]
+    product_labels = {
+        "Dr": "Dispatchable Reserve",
+        "Fr": "Frequency Regulation",
+        "Rd": "Regulating Down",
+        "Ru": "Regulating Up",
+    }
+    product_stats = (
+        reserve.groupby(["REGION_NAME", "COMMODITY_TYPE", "RUN_DATE", "SLOT_15M"], observed=True)
+        .agg(mean_price=("MARGINAL_PRICE", "mean"))
+        .reset_index()
+        .groupby(["REGION_NAME", "COMMODITY_TYPE", "SLOT_15M"], observed=True)["mean_price"]
+        .quantile([0.10, 0.25, 0.50, 0.75, 0.90])
+        .unstack()
+        .reset_index()
+        .rename(columns={0.10: "p10", 0.25: "p25", 0.50: "p50", 0.75: "p75", 0.90: "p90"})
+    )
+    if slot_min is not None:
+        product_stats = product_stats[product_stats["SLOT_15M"] >= slot_min]
+    if slot_max is not None:
+        product_stats = product_stats[product_stats["SLOT_15M"] <= slot_max]
+
+    regions = [region for region in region_order if region in set(product_stats["REGION_NAME"].astype(str))]
+    products = [product for product in product_order if product in set(product_stats["COMMODITY_TYPE"].astype(str))]
+    fig, axes = plt.subplots(len(regions), len(products), figsize=(18, 11), sharex=True, sharey=True)
+    if len(regions) == 1 and len(products) == 1:
+        axes = np.array([[axes]])
+    elif len(regions) == 1:
+        axes = np.array([axes])
+    elif len(products) == 1:
+        axes = np.array([[ax] for ax in axes])
+
+    fill_outer = "#fdd0a2"
+    fill_inner = "#fc8d59"
+    line_color = "#7f0000"
+    y_min = float(product_stats["p10"].min())
+    y_max = float(product_stats["p90"].max())
+    handles = None
+
+    for row_idx, region in enumerate(regions):
+        for col_idx, product in enumerate(products):
+            ax = axes[row_idx, col_idx]
+            panel = product_stats[
+                (product_stats["REGION_NAME"].astype(str) == region)
+                & (product_stats["COMMODITY_TYPE"].astype(str) == product)
+            ]
+            outer = ax.fill_between(
+                panel["SLOT_15M"],
+                panel["p10"],
+                panel["p90"],
+                color=fill_outer,
+                alpha=0.45,
+                label="10-90 percentile",
+            )
+            inner = ax.fill_between(
+                panel["SLOT_15M"],
+                panel["p25"],
+                panel["p75"],
+                color=fill_inner,
+                alpha=0.55,
+                label="25-75 percentile",
+            )
+            median_line, = ax.plot(
+                panel["SLOT_15M"],
+                panel["p50"],
+                color=line_color,
+                linewidth=2.0,
+                label="50 percentile",
+            )
+            ax.set_ylim(y_min, y_max)
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.0f}"))
+            ax.tick_params(axis="y", labelsize=12)
+            ax.tick_params(axis="x", labelsize=12)
+            if row_idx == 0:
+                ax.set_title(product_labels.get(product, product), fontsize=13)
+            if col_idx == 0:
+                ax.set_ylabel(region_labels.get(region, region), fontsize=13)
+            if handles is None:
+                handles = [outer, inner, median_line]
+
+    tick_start = int(product_stats["SLOT_15M"].min())
+    tick_end = int(product_stats["SLOT_15M"].max())
+    tick_step = 8 if (tick_end - tick_start) <= 56 else 16
+    ticks = np.arange(tick_start, tick_end + 1, tick_step)
+    for ax in axes[-1, :]:
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([f"{int(slot // 4):02d}:{int((slot % 4) * 15):02d}" for slot in ticks], fontsize=12)
+        ax.tick_params(axis="x", labelsize=12)
+    fig.suptitle(title, fontsize=16, y=0.98)
+    fig.legend(
+        handles,
+        ["10-90 percentile", "25-75 percentile", "50 percentile"],
+        loc="lower center",
+        ncol=3,
+        frameon=False,
+        bbox_to_anchor=(0.5, 0.01),
+        fontsize=12,
+    )
+    fig.tight_layout(rect=(0, 0.08, 1, 0.95))
     save_figure(fig, output_path)
 
 
@@ -422,8 +675,27 @@ def main() -> int:
         setter_summaries["mp"],
         png_dir / "setter_interaction_scatter.png",
     )
-    plot_mp_intraday_spaghetti(data["mp"], png_dir / "mp_intraday_spaghetti.png")
-    plot_mp_intraday_spaghetti_by_region(data["mp"], png_dir / "mp_intraday_spaghetti_by_region.png")
+    plot_mp_intraday_percentiles(data["mp"], png_dir / "mp_intraday_percentiles.png")
+    plot_mp_intraday_region_medians(data["mp"], png_dir / "mp_intraday_percentiles_with_region_medians.png")
+    plot_mp_intraday_percentiles_by_region(data["mp"], png_dir / "mp_intraday_percentiles_by_region.png")
+    plot_mp_intraday_percentiles_by_region(
+        data["mp"],
+        png_dir / "mp_intraday_percentiles_by_region_0800_2200.png",
+        slot_min=32,
+        slot_max=88,
+        title="Marginal Price Percentiles by Region (08:00-22:00)",
+    )
+    plot_reserve_intraday_percentiles_by_product(
+        data["reserve"],
+        png_dir / "reserve_intraday_percentiles_by_product.png",
+    )
+    plot_reserve_intraday_percentiles_by_product(
+        data["reserve"],
+        png_dir / "reserve_intraday_percentiles_by_product_0800_2200.png",
+        slot_min=32,
+        slot_max=88,
+        title="Reserve Price Percentiles by Product (08:00-22:00)",
+    )
 
     print(f"Analysis summaries written to {summary_dir}")
     print(f"Analysis PNGs written to {png_dir}")
