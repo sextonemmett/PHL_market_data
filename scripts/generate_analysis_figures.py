@@ -25,6 +25,12 @@ DATASETS = {
         "color": "#8b4513",
     },
 }
+RESERVE_PRODUCT_LABELS = {
+    "Dr": "Delayed Contingency Raise",
+    "Fr": "Fast Contingency Raise",
+    "Rd": "Regulation Down",
+    "Ru": "Regulation Up",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,6 +63,10 @@ def save_figure(fig: plt.Figure, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
+
+
+def reserve_product_label(code: str) -> str:
+    return RESERVE_PRODUCT_LABELS.get(code, code)
 
 
 def extract_prefix(resource_name: str) -> str:
@@ -248,7 +258,7 @@ def plot_top_effective_setters(
         frame = reserve_setters[reserve_setters["COMMODITY_TYPE"].astype(str) == product]
         top = frame.head(12).sort_values("setter_share_pct")
         ax.barh(top["ENTITY_NAME"].astype(str), top["setter_share_pct"], color=DATASETS["reserve"]["color"])
-        ax.set_title(f"Reserve {product}: Top Effective Setters")
+        ax.set_title(f"{reserve_product_label(product)}: Top Effective Setters")
         ax.set_xlabel("Effective Setter Share (%)")
         ax.set_ylabel("Resource")
 
@@ -307,7 +317,7 @@ def plot_setter_interaction_scatter(
             edgecolor="white",
             linewidth=0.4,
         )
-        ax.set_title(f"Reserve {product} vs MP Setter Share")
+        ax.set_title(f"{reserve_product_label(product)} vs MP Setter Share")
         ax.set_xlabel("Reserve Setter Share (%)")
         ax.set_ylabel("MP Setter Share (%)")
 
@@ -536,12 +546,6 @@ def plot_reserve_intraday_percentiles_by_product(
     region_order = ["CLUZ", "CVIS", "CMIN"]
     region_labels = {"CLUZ": "Luzon", "CVIS": "Visayas", "CMIN": "Mindanao"}
     product_order = ["Dr", "Fr", "Rd", "Ru"]
-    product_labels = {
-        "Dr": "Dispatchable Reserve",
-        "Fr": "Frequency Regulation",
-        "Rd": "Regulating Down",
-        "Ru": "Regulating Up",
-    }
     product_stats = (
         reserve.groupby(["REGION_NAME", "COMMODITY_TYPE", "RUN_DATE", "SLOT_15M"], observed=True)
         .agg(mean_price=("MARGINAL_PRICE", "mean"))
@@ -609,7 +613,7 @@ def plot_reserve_intraday_percentiles_by_product(
             ax.tick_params(axis="y", labelsize=12)
             ax.tick_params(axis="x", labelsize=12)
             if row_idx == 0:
-                ax.set_title(product_labels.get(product, product), fontsize=13)
+                ax.set_title(reserve_product_label(product), fontsize=13)
             if col_idx == 0:
                 ax.set_ylabel(region_labels.get(region, region), fontsize=13)
             if handles is None:

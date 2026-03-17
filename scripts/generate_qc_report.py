@@ -28,6 +28,12 @@ DATASETS = {
 }
 STATUS_COLORS = {"ok": "#2f855a", "warning": "#dd6b20", "error": "#c53030"}
 DATASET_COLORS = {"reserve": "#1f4e79", "mp": "#8b4513"}
+RESERVE_PRODUCT_LABELS = {
+    "Dr": "Dr\nDelayed Contingency Raise",
+    "Fr": "Fr\nFast Contingency Raise",
+    "Rd": "Rd\nRegulation Down",
+    "Ru": "Ru\nRegulation Up",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -330,10 +336,11 @@ def plot_resource_overlap(summaries: dict[str, dict[str, pd.DataFrame]], output_
 
 def plot_reserve_commodity_summary(commodity_summary: pd.DataFrame, output_path: Path) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.2))
-    axes[0].bar(commodity_summary["COMMODITY_TYPE"].astype(str), commodity_summary["rows"], color="#4c78a8")
+    labels = [RESERVE_PRODUCT_LABELS.get(code, code) for code in commodity_summary["COMMODITY_TYPE"].astype(str)]
+    axes[0].bar(labels, commodity_summary["rows"], color="#4c78a8")
     axes[0].set_title("Reserve Commodity Row Counts")
     axes[0].set_ylabel("Rows")
-    axes[1].bar(commodity_summary["COMMODITY_TYPE"].astype(str), commodity_summary["avg_price"], color="#f58518")
+    axes[1].bar(labels, commodity_summary["avg_price"], color="#f58518")
     axes[1].set_title("Reserve Commodity Average Price")
     axes[1].set_ylabel("Average Price")
     save_figure(fig, output_path)
