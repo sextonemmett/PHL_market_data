@@ -11,7 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
+from matplotlib.colors import LinearSegmentedColormap, Normalize, TwoSlopeNorm
 
 DATASETS = {
     "reserve": {
@@ -25,6 +25,8 @@ DATASETS = {
         "color": "#8b4513",
     },
 }
+REGION_LABELS = {"CLUZ": "Luzon", "CVIS": "Visayas", "CMIN": "Mindanao"}
+REGION_COLORS = {"CLUZ": "#7f2704", "CVIS": "#d95f0e", "CMIN": "#f16913"}
 RESERVE_PRODUCT_LABELS = {
     "Dr": "Delayed Contingency Raise",
     "Fr": "Fast Contingency Raise",
@@ -95,6 +97,55 @@ def build_daily_region_mean(df: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
     )
     return daily
+
+
+def build_daily_region_product_mean(df: pd.DataFrame) -> pd.DataFrame:
+    daily = (
+        df.groupby(["RUN_DATE", "REGION_NAME", "COMMODITY_TYPE"], observed=True)
+        .agg(
+            mean_price=("MARGINAL_PRICE", "mean"),
+            median_price=("MARGINAL_PRICE", "median"),
+            rows=("RUN_TIME", "size"),
+        )
+        .reset_index()
+    )
+    return daily
+
+
+def build_daily_mp_reserve_comparison(
+    mp_daily: pd.DataFrame,
+    reserve_daily: pd.DataFrame,
+) -> pd.DataFrame:
+    comparison = reserve_daily.merge(
+        mp_daily[["RUN_DATE", "REGION_NAME", "mean_price"]].rename(columns={"mean_price": "mp_mean_price"}),
+        on=["RUN_DATE", "REGION_NAME"],
+        how="inner",
+    ).rename(columns={"mean_price": "reserve_mean_price"})
+    return comparison.sort_values(["COMMODITY_TYPE", "REGION_NAME", "RUN_DATE"]).reset_index(drop=True)
+
+
+def add_within_group_percentiles(
+    df: pd.DataFrame,
+    group_cols: list[str],
+    value_col: str = "mean_price",
+    output_col: str = "percentile_value",
+) -> pd.DataFrame:
+    ranked = df.copy()
+    ranked[output_col] = (
+        ranked.groupby(group_cols, observed=True)[value_col]
+        .rank(method="average", pct=True)
+        .mul(100.0)
+    )
+    return ranked
+
+
+def build_diverging_norm(values: pd.Series) -> Normalize:
+    vmin = float(values.min())
+    vmax = float(values.max())
+    if vmin < 0.0 and vmax > 0.0:
+        bound = max(abs(vmin), abs(vmax))
+        return TwoSlopeNorm(vmin=-bound, vcenter=0.0, vmax=bound)
+    return Normalize(vmin=vmin, vmax=vmax)
 
 
 def build_effective_setter_summary(
@@ -210,41 +261,6 @@ def save_summaries(
     overlap.to_csv(output_dir / "setter_overlap.csv", index=False)
 
 
-def plot_regional_daily_heatmaps(
-    reserve_daily: pd.DataFrame,
-    mp_daily: pd.DataFrame,
-    output_path: Path,
-) -> None:
-    fig, axes = plt.subplots(2, 1, figsize=(13, 5.6), sharex=False)
-    global_min = min(reserve_daily["mean_price"].min(), mp_daily["mean_price"].min())
-    global_max = max(reserve_daily["mean_price"].max(), mp_daily["mean_price"].max())
-    cmap = LinearSegmentedColormap.from_list(
-        "green_white_red",
-        [(0.0, "#0b5d1e"), (0.5, "#ffffff"), (1.0, "#8b0000")],
-    )
-    norm = TwoSlopeNorm(vmin=global_min, vcenter=0.0, vmax=global_max)
-
-    image = None
-    for ax, (dataset_name, frame) in zip(axes, [("reserve", reserve_daily), ("mp", mp_daily)]):
-        pivot = (
-            frame.pivot(index="REGION_NAME", columns="RUN_DATE", values="mean_price")
-            .sort_index()
-            .astype(float)
-        )
-        dates = pd.to_datetime(pivot.columns)
-        image = ax.imshow(pivot.values, aspect="auto", cmap=cmap, norm=norm)
-        ax.set_yticks(range(len(pivot.index)))
-        ax.set_yticklabels(pivot.index)
-        tick_positions = np.linspace(0, len(dates) - 1, min(10, len(dates)), dtype=int)
-        ax.set_xticks(tick_positions)
-        ax.set_xticklabels([dates[pos].strftime("%Y-%m-%d") for pos in tick_positions], rotation=45, ha="right")
-        ax.set_title(f"{DATASETS[dataset_name]['title']}: Average Daily Regional Price")
-
-    colorbar = fig.colorbar(image, ax=axes, shrink=0.9)
-    colorbar.set_label("Average Price")
-    save_figure(fig, output_path)
-
-
 def plot_top_effective_setters(
     reserve_setters: pd.DataFrame,
     mp_setters: pd.DataFrame,
@@ -333,6 +349,261 @@ def plot_setter_interaction_scatter(
     save_figure(fig, output_path)
 
 
+def plot_mp_daily_price_heatmap(mp_daily: pd.DataFrame, output_path: Path) -> None:
+    region_order = ["CLUZ", "CVIS", "CMIN"]
+    region_labels = {"CLUZ": "Luzon", "CVIS": "Visayas", "CMIN": "Mindanao"}
+    cmap = LinearSegmentedColormap.from_list(
+        "green_yellow_red",
+        [(0.0, "#0b5d1e"), (0.5, "#fff2a8"), (1.0, "#8b0000")],
+    )
+    norm = build_diverging_norm(mp_daily["mean_price"])
+    regions = [region for region in region_order if region in set(mp_daily["REGION_NAME"].astype(str))]
+
+    fig, axes = plt.subplots(len(regions), 1, figsize=(13, 3.9), sharex=True, gridspec_kw={"hspace": 0.02})
+    if len(regions) == 1:
+        axes = [axes]
+
+    image = None
+    for ax, region in zip(axes, regions):
+        region_frame = mp_daily[mp_daily["REGION_NAME"].astype(str) == region]
+        pivot = (
+            region_frame.pivot(index="REGION_NAME", columns="RUN_DATE", values="mean_price")
+            .sort_index()
+            .astype(float)
+        )
+        dates = pd.to_datetime(pivot.columns)
+        image = ax.imshow(pivot.values, aspect="auto", cmap=cmap, norm=norm)
+        ax.set_yticks([0])
+        ax.set_yticklabels([region_labels.get(region, region)], fontsize=13)
+        ax.tick_params(axis="y", length=0)
+        if ax is not axes[-1]:
+            ax.tick_params(axis="x", bottom=False, labelbottom=False)
+        else:
+            tick_positions = np.linspace(0, len(dates) - 1, min(10, len(dates)), dtype=int)
+            ax.set_xticks(tick_positions)
+            ax.set_xticklabels([dates[pos].strftime("%Y-%m-%d") for pos in tick_positions], rotation=45, ha="right", fontsize=11)
+
+    fig.suptitle("Average Daily Market Price by Region", fontsize=16, y=0.98)
+    fig.subplots_adjust(top=0.88, bottom=0.14, left=0.1, right=0.88, hspace=0.02)
+    colorbar_ax = fig.add_axes([0.9, 0.17, 0.015, 0.66])
+    colorbar = fig.colorbar(image, cax=colorbar_ax)
+    colorbar.set_label("Average Price (PHP/MWh)", fontsize=12)
+    colorbar.ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.0f}"))
+    save_figure(fig, output_path)
+
+
+def plot_stacked_daily_heatmap(
+    df: pd.DataFrame,
+    row_specs: list[tuple[tuple[str, ...], str]],
+    output_path: Path,
+    title: str,
+    value_col: str,
+    colorbar_label: str,
+    cmap,
+    norm: Normalize | None = None,
+    colorbar_formatter=None,
+    y_fontsize: int = 11,
+    spacer_after_indices: list[int] | None = None,
+    y_fontfamily: str | None = None,
+    left_margin: float = 0.2,
+) -> None:
+    spacer_after_indices = spacer_after_indices or []
+    total_rows = len(row_specs) + len(spacer_after_indices)
+    height_ratios = []
+    for idx in range(len(row_specs)):
+        height_ratios.append(1.0)
+        if idx in spacer_after_indices:
+            height_ratios.append(0.22)
+
+    fig = plt.figure(figsize=(13, 0.62 * total_rows + 1.9))
+    grid = fig.add_gridspec(total_rows, 1, hspace=0.02, height_ratios=height_ratios)
+    axes = []
+    grid_row = 0
+    for idx in range(len(row_specs)):
+        ax = fig.add_subplot(grid[grid_row, 0], sharex=axes[0] if axes else None)
+        axes.append(ax)
+        grid_row += 1
+        if idx in spacer_after_indices:
+            spacer_ax = fig.add_subplot(grid[grid_row, 0])
+            spacer_ax.axis("off")
+            grid_row += 1
+
+    image = None
+    for ax, (row_key, row_label) in zip(axes, row_specs):
+        if len(row_key) == 1:
+            region = row_key[0]
+            row_frame = df[df["REGION_NAME"].astype(str) == region]
+        else:
+            region, product = row_key
+            row_frame = df[
+                (df["REGION_NAME"].astype(str) == region)
+                & (df["COMMODITY_TYPE"].astype(str) == product)
+            ]
+        pivot = (
+            row_frame.assign(_ROW_LABEL=row_label)
+            .pivot(index="_ROW_LABEL", columns="RUN_DATE", values=value_col)
+            .astype(float)
+        )
+        dates = pd.to_datetime(pivot.columns)
+        image = ax.imshow(
+            pivot.values,
+            aspect="auto",
+            cmap=cmap,
+            norm=norm if norm is not None else Normalize(vmin=float(df[value_col].min()), vmax=float(df[value_col].max())),
+        )
+        ax.set_yticks([0])
+        ax.set_yticklabels([row_label], fontsize=y_fontsize, fontfamily=y_fontfamily)
+        ax.tick_params(axis="y", length=0)
+        if ax is not axes[-1]:
+            ax.tick_params(axis="x", bottom=False, labelbottom=False)
+        else:
+            tick_positions = np.linspace(0, len(dates) - 1, min(10, len(dates)), dtype=int)
+            ax.set_xticks(tick_positions)
+            ax.set_xticklabels(
+                [dates[pos].strftime("%Y-%m-%d") for pos in tick_positions],
+                rotation=45,
+                ha="right",
+                fontsize=11,
+            )
+
+    fig.suptitle(title, fontsize=16, y=0.98)
+    fig.subplots_adjust(top=0.9, bottom=0.12, left=left_margin, right=0.88, hspace=0.02)
+    colorbar_ax = fig.add_axes([0.9, 0.16, 0.015, 0.68])
+    colorbar = fig.colorbar(image, cax=colorbar_ax)
+    colorbar.set_label(colorbar_label, fontsize=12)
+    if colorbar_formatter is not None:
+        colorbar.ax.yaxis.set_major_formatter(colorbar_formatter)
+    save_figure(fig, output_path)
+
+
+def plot_mp_daily_price_heatmap_percentile(mp_daily: pd.DataFrame, output_path: Path) -> None:
+    region_order = ["CLUZ", "CVIS", "CMIN"]
+    region_labels = {"CLUZ": "Luzon", "CVIS": "Visayas", "CMIN": "Mindanao"}
+    row_specs = [((region,), region_labels.get(region, region)) for region in region_order]
+    percentile_daily = add_within_group_percentiles(mp_daily, ["REGION_NAME"])
+    plot_stacked_daily_heatmap(
+        percentile_daily,
+        row_specs=row_specs,
+        output_path=output_path,
+        title="Average Daily Market Price by Region (Within-Region Percentiles)",
+        value_col="percentile_value",
+        colorbar_label="Within-Region Percentile",
+        cmap=plt.get_cmap("YlOrRd"),
+        norm=Normalize(vmin=0.0, vmax=100.0),
+        colorbar_formatter=plt.FuncFormatter(lambda x, _: f"{x:.0f}"),
+        y_fontsize=13,
+    )
+
+
+def plot_reserve_daily_price_heatmap_by_region_product(
+    reserve_daily: pd.DataFrame,
+    output_path: Path,
+) -> None:
+    region_order = ["CLUZ", "CVIS", "CMIN"]
+    region_labels = {"CLUZ": "Luzon", "CVIS": "Visayas", "CMIN": "Mindanao"}
+    product_order = ["Dr", "Fr", "Rd", "Ru"]
+    row_specs = [
+        ((region, product), f"{region_labels.get(region, region)} - {reserve_product_label(product)}")
+        for region in region_order
+        for product in product_order
+    ]
+    plot_stacked_daily_heatmap(
+        reserve_daily,
+        row_specs=row_specs,
+        output_path=output_path,
+        title="Reserve Daily Price by Region and Product (PHP/MWh)",
+        value_col="mean_price",
+        colorbar_label="Average Price (PHP/MWh)",
+        cmap=plt.get_cmap("YlOrRd"),
+        norm=Normalize(vmin=float(reserve_daily["mean_price"].min()), vmax=float(reserve_daily["mean_price"].max())),
+        colorbar_formatter=plt.FuncFormatter(lambda x, _: f"{x:,.0f}"),
+        y_fontsize=10,
+        spacer_after_indices=[3, 7],
+    )
+
+
+def plot_daily_mp_vs_reserve_scatter(comparison: pd.DataFrame, output_path: Path) -> None:
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10), sharex=False, sharey=False)
+    product_order = ["Dr", "Fr", "Rd", "Ru"]
+
+    for ax, product in zip(axes.flatten(), product_order):
+        frame = comparison[comparison["COMMODITY_TYPE"].astype(str) == product].copy()
+        for region in ["CLUZ", "CVIS", "CMIN"]:
+            region_frame = frame[frame["REGION_NAME"].astype(str) == region]
+            if region_frame.empty:
+                continue
+            ax.scatter(
+                region_frame["mp_mean_price"],
+                region_frame["reserve_mean_price"],
+                s=24,
+                alpha=0.75,
+                color=REGION_COLORS[region],
+                label=REGION_LABELS[region],
+                edgecolor="white",
+                linewidth=0.4,
+            )
+        if len(frame) >= 2:
+            x = frame["mp_mean_price"].to_numpy(dtype=float)
+            y = frame["reserve_mean_price"].to_numpy(dtype=float)
+            slope, intercept = np.polyfit(x, y, 1)
+            x_line = np.linspace(x.min(), x.max(), 100)
+            ax.plot(x_line, slope * x_line + intercept, color="#1f2937", linewidth=1.8, linestyle="--")
+        ax.set_title(reserve_product_label(product), fontsize=13)
+        ax.set_xlabel("Daily Average MP (PHP/MWh)")
+        ax.set_ylabel("Daily Average Reserve (PHP/MWh)")
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.0f}"))
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.0f}"))
+
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False, fontsize=11, bbox_to_anchor=(0.5, 0.01))
+    fig.suptitle("Daily Average MP vs Reserve Price by Product", fontsize=16, y=0.98)
+    fig.tight_layout(rect=(0, 0.05, 1, 0.95))
+    save_figure(fig, output_path)
+
+
+def plot_daily_mp_reserve_rolling_correlation(
+    comparison: pd.DataFrame,
+    output_path: Path,
+    window_days: int = 14,
+    min_periods: int = 7,
+) -> None:
+    fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True, sharey=True)
+    region_order = ["CLUZ", "CVIS", "CMIN"]
+    product_order = ["Dr", "Fr", "Rd", "Ru"]
+    product_colors = {"Dr": "#2b6cb0", "Fr": "#d69e2e", "Rd": "#c53030", "Ru": "#805ad5"}
+
+    for ax, region in zip(axes, region_order):
+        frame = comparison[comparison["REGION_NAME"].astype(str) == region].copy()
+        for product in product_order:
+            product_frame = frame[frame["COMMODITY_TYPE"].astype(str) == product].sort_values("RUN_DATE").copy()
+            if product_frame.empty:
+                continue
+            product_frame["rolling_corr"] = (
+                product_frame["mp_mean_price"]
+                .rolling(window=window_days, min_periods=min_periods)
+                .corr(product_frame["reserve_mean_price"])
+            )
+            ax.plot(
+                product_frame["RUN_DATE"],
+                product_frame["rolling_corr"],
+                color=product_colors[product],
+                linewidth=2.0,
+                label=reserve_product_label(product),
+            )
+        ax.axhline(0.0, color="#4a5568", linewidth=1.0, linestyle=":")
+        ax.set_title(REGION_LABELS[region], fontsize=13)
+        ax.set_ylim(-1.0, 1.0)
+        ax.set_ylabel("Correlation")
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.1f}"))
+
+    axes[-1].tick_params(axis="x", rotation=45)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=2, frameon=False, fontsize=11, bbox_to_anchor=(0.5, -0.005))
+    fig.suptitle(f"{window_days}-Day Rolling Correlation: Daily Average MP vs Reserve", fontsize=16, y=0.98)
+    fig.tight_layout(rect=(0, 0.09, 1, 0.95))
+    save_figure(fig, output_path)
+
+
 def plot_mp_intraday_percentiles(mp: pd.DataFrame, output_path: Path) -> None:
     slot_stats = (
         mp.groupby(["RUN_DATE", "SLOT_15M"], observed=True)
@@ -371,7 +642,7 @@ def plot_mp_intraday_percentiles(mp: pd.DataFrame, output_path: Path) -> None:
     ax.plot(slot_stats["SLOT_15M"], slot_stats["p90"], color="#b30000", linewidth=1.0, alpha=0.8, linestyle="--")
     ax.plot(slot_stats["SLOT_15M"], slot_stats["p10"], color="#b30000", linewidth=1.0, alpha=0.8, linestyle="--")
     ax.set_title("Marginal Price Percentiles", fontsize=16)
-    ax.set_ylabel("Marginal Price", fontsize=13)
+    ax.set_ylabel("Marginal Price (PHP/MWh)", fontsize=13)
     ax.set_xticks(np.arange(0, 97, 8))
     ax.set_xticklabels([f"{int(slot // 4):02d}:00" for slot in np.arange(0, 97, 8)], fontsize=12)
     ax.tick_params(axis="x", labelsize=12)
@@ -422,7 +693,7 @@ def plot_mp_intraday_region_medians(mp: pd.DataFrame, output_path: Path) -> None
         region_handles.append(region_line)
 
     ax.set_title("Regional Median Marginal Prices", fontsize=16)
-    ax.set_ylabel("Marginal Price", fontsize=13)
+    ax.set_ylabel("Marginal Price (PHP/MWh)", fontsize=13)
     ax.set_xticks(np.arange(0, 97, 8))
     ax.set_xticklabels([f"{int(slot // 4):02d}:00" for slot in np.arange(0, 97, 8)], fontsize=12)
     ax.tick_params(axis="x", labelsize=12)
@@ -446,7 +717,7 @@ def plot_mp_intraday_percentiles_by_region(
     output_path: Path,
     slot_min: int | None = None,
     slot_max: int | None = None,
-    title: str = "Marginal Price Percentiles by Region",
+    title: str = "Marginal Price Percentiles by Region (PHP/MWh)",
 ) -> None:
     regional = (
         mp.groupby(["REGION_NAME", "RUN_DATE", "SLOT_15M"], observed=True)
@@ -541,7 +812,7 @@ def plot_reserve_intraday_percentiles_by_product(
     output_path: Path,
     slot_min: int | None = None,
     slot_max: int | None = None,
-    title: str = "Reserve Price Percentiles by Region and Product",
+    title: str = "Reserve Price Percentiles by Region and Product (PHP/MWh)",
 ) -> None:
     region_order = ["CLUZ", "CVIS", "CMIN"]
     region_labels = {"CLUZ": "Luzon", "CVIS": "Visayas", "CMIN": "Mindanao"}
@@ -651,6 +922,11 @@ def main() -> int:
     png_dir = output_root / "png"
 
     daily_region_means = {name: build_daily_region_mean(frame) for name, frame in data.items()}
+    reserve_daily_region_product = build_daily_region_product_mean(data["reserve"])
+    daily_mp_reserve_comparison = build_daily_mp_reserve_comparison(
+        daily_region_means["mp"],
+        reserve_daily_region_product,
+    )
     setter_summaries = {}
     setter_region_summaries = {}
     for name, frame in data.items():
@@ -664,10 +940,25 @@ def main() -> int:
 
     save_summaries(daily_region_means, setter_summaries, setter_region_summaries, summary_dir)
 
-    plot_regional_daily_heatmaps(
-        daily_region_means["reserve"],
+    plot_mp_daily_price_heatmap(
         daily_region_means["mp"],
-        png_dir / "regional_daily_price_heatmaps.png",
+        png_dir / "mp_daily_price_heatmap.png",
+    )
+    plot_mp_daily_price_heatmap_percentile(
+        daily_region_means["mp"],
+        png_dir / "mp_daily_price_heatmap_percentile.png",
+    )
+    plot_reserve_daily_price_heatmap_by_region_product(
+        reserve_daily_region_product,
+        png_dir / "reserve_daily_price_heatmap_by_region_product.png",
+    )
+    plot_daily_mp_vs_reserve_scatter(
+        daily_mp_reserve_comparison,
+        png_dir / "daily_mp_vs_reserve_scatter.png",
+    )
+    plot_daily_mp_reserve_rolling_correlation(
+        daily_mp_reserve_comparison,
+        png_dir / "daily_mp_reserve_rolling_correlation.png",
     )
     plot_top_effective_setters(
         setter_summaries["reserve"],
@@ -687,7 +978,7 @@ def main() -> int:
         png_dir / "mp_intraday_percentiles_by_region_0800_2200.png",
         slot_min=32,
         slot_max=88,
-        title="Marginal Price Percentiles by Region (08:00-22:00)",
+        title="Marginal Price Percentiles by Region (PHP/MWh, 08:00-22:00)",
     )
     plot_reserve_intraday_percentiles_by_product(
         data["reserve"],
@@ -698,7 +989,7 @@ def main() -> int:
         png_dir / "reserve_intraday_percentiles_by_product_0800_2200.png",
         slot_min=32,
         slot_max=88,
-        title="Reserve Price Percentiles by Product (08:00-22:00)",
+        title="Reserve Price Percentiles by Region and Product (PHP/MWh, 08:00-22:00)",
     )
 
     print(f"Analysis summaries written to {summary_dir}")

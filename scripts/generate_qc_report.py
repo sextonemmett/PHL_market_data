@@ -293,7 +293,7 @@ def plot_daily_price_trends(dataset_name: str, daily: pd.DataFrame, output_path:
     ax.plot(daily["RUN_DATE"], daily["mean_price"], color=color, linewidth=2, label="Mean price")
     ax.plot(daily["RUN_DATE"], daily["median_price"], color="#2d3748", linewidth=1.5, label="Median price")
     ax.set_title(f"{DATASETS[dataset_name]['title']}: Daily Price Trend")
-    ax.set_ylabel("Marginal Price")
+    ax.set_ylabel("Marginal Price (PHP/MWh)")
     apply_date_axis(ax)
     ax.legend(frameon=False, ncol=3)
     save_figure(fig, output_path)
@@ -308,7 +308,7 @@ def plot_hourly_profile(summaries: dict[str, dict[str, pd.DataFrame]], output_pa
         ax.set_xticks(range(0, 24, 2))
         ax.set_xlabel("Hour of Day")
         ax.set_title("Hourly Mean Price" if metric == "mean_price" else "Hourly Row Volume")
-        ax.set_ylabel("Price" if metric == "mean_price" else "Rows")
+        ax.set_ylabel("Price (PHP/MWh)" if metric == "mean_price" else "Rows")
     axes[0].legend(frameon=False)
     save_figure(fig, output_path)
 
@@ -342,7 +342,7 @@ def plot_reserve_commodity_summary(commodity_summary: pd.DataFrame, output_path:
     axes[0].set_ylabel("Rows")
     axes[1].bar(labels, commodity_summary["avg_price"], color="#f58518")
     axes[1].set_title("Reserve Commodity Average Price")
-    axes[1].set_ylabel("Average Price")
+    axes[1].set_ylabel("Average Price (PHP/MWh)")
     save_figure(fig, output_path)
 
 
