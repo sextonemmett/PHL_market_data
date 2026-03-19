@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+from rtd_download_core import DatasetConfig, IntervalExpectation
+
+RTDHL_CONFIG = DatasetConfig(
+    dataset_code="RTDHL",
+    description="RTD HVDC limits imposed",
+    page_url="https://www.iemop.ph/market-data/hvdc-limits-imposed-in-rtd/",
+    md_file_prefix="/var/www/html/wp-content/uploads/downloads/data/RTDHL/RTDHL_",
+    output_root="data/rtd_hvdc_limits",
+    raw_filename_prefix="RTDHL",
+    qc_manifest_prefix="rtdhl_qc",
+    combined_filename_prefix="RTDHL",
+    raw_header=(
+        "RUN_TIME",
+        "MKT_TYPE",
+        "HVDC_NAME",
+        "START_TIME",
+        "END_TIME",
+        "HVDC_LIMIT_TYPE",
+        "MAX_MW",
+        "MIN_MW",
+        "",
+    ),
+    timestamp_columns=("RUN_TIME", "START_TIME", "END_TIME"),
+    numeric_columns=("MAX_MW", "MIN_MW"),
+)
+
+RTDSL_CONFIG = DatasetConfig(
+    dataset_code="RTDSL",
+    description="RTD security limits used",
+    page_url="https://www.iemop.ph/market-data/security-limits-used-in-rtd/",
+    md_file_prefix="/var/www/html/wp-content/uploads/downloads/data/RTDSL/RTDSL_",
+    output_root="data/rtd_security_limits",
+    raw_filename_prefix="RTDSL",
+    qc_manifest_prefix="rtdsl_qc",
+    combined_filename_prefix="RTDSL",
+    raw_header=(
+        "RUN_TIME",
+        "MKT_TYPE",
+        "REGION_NAME",
+        "RESOURCE_NAME",
+        "RESOURCE_TYPE",
+        "START_TIME",
+        "END_TIME",
+        "PARAMETER_TYPE",
+        "PARAMETER_VALUE",
+        "",
+    ),
+    timestamp_columns=("RUN_TIME", "START_TIME", "END_TIME"),
+    numeric_columns=("PARAMETER_VALUE",),
+)
+
+RTDCV_CONFIG = DatasetConfig(
+    dataset_code="RTDCV",
+    description="RTD congestions manifesting",
+    page_url="https://www.iemop.ph/market-data/congestions-manifesting-in-rtd/",
+    md_file_prefix="/var/www/html/wp-content/uploads/downloads/data/RTDCV/RTDCV_",
+    output_root="data/rtd_congestion",
+    raw_filename_prefix="RTDCV",
+    qc_manifest_prefix="rtdcv_qc",
+    combined_filename_prefix="RTDCV",
+    raw_header=(
+        "RUN_TIME",
+        "MKT_TYPE",
+        "TIME_INTERVAL",
+        "CONGEST_TYPE",
+        "RUN_TYPE",
+        "EQUIPMENT_NAME",
+        "STATION_NAME",
+        "VOLTAGE_LEVEL",
+        "BINDING_LIMIT",
+        "MW_FLOW",
+        "OVERLOAD_MW",
+        "PCT_MW",
+        "",
+    ),
+    timestamp_columns=("RUN_TIME", "TIME_INTERVAL"),
+    numeric_columns=("VOLTAGE_LEVEL", "BINDING_LIMIT", "MW_FLOW", "OVERLOAD_MW", "PCT_MW"),
+)
+
+RTDHS_CONFIG = DatasetConfig(
+    dataset_code="RTDHS",
+    description="RTD HVDC schedules",
+    page_url="https://www.iemop.ph/market-data/rtd-hvdc-schedules/",
+    md_file_prefix="/var/www/html/wp-content/uploads/downloads/data/RTDHS/RTDHS_",
+    output_root="data/rtd_hvdc_schedules",
+    raw_filename_prefix="RTDHS",
+    qc_manifest_prefix="rtdhs_qc",
+    combined_filename_prefix="RTDHS",
+    raw_header=(
+        "RUN_TIME",
+        "MKT_TYPE",
+        "TIME_INTERVAL",
+        "HVDC_NAME",
+        "CONGESTION_FLAG",
+        "FLOW_FROM",
+        "FLOW_TO",
+        "OVERLOAD_MW",
+        "",
+    ),
+    timestamp_columns=("RUN_TIME", "TIME_INTERVAL"),
+    numeric_columns=("FLOW_FROM", "FLOW_TO", "OVERLOAD_MW"),
+    interval_expectation=IntervalExpectation(
+        interval_column="TIME_INTERVAL",
+        expected_count=288,
+        required_values_by_column={"HVDC_NAME": ("MINVIS1", "VISLUZ1")},
+    ),
+)
