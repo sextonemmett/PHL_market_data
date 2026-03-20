@@ -86,7 +86,7 @@ def format_pct(value: float, digits: int = 2) -> str:
 
 
 def markdown_table(frame: pd.DataFrame) -> str:
-    display = frame.fillna("")
+    display = frame.astype(object).where(~frame.isna(), "")
     headers = [str(col) for col in display.columns]
     rows = [[str(value) for value in row] for row in display.to_numpy().tolist()]
     widths = [len(header) for header in headers]
@@ -329,6 +329,206 @@ def build_overview_table(df: pd.DataFrame, qc: pd.DataFrame, title: str) -> pd.D
     )
 
 
+def build_rtdcv_relationship_tables(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    calc_overload = df["MW_FLOW"] - df["BINDING_LIMIT"]
+    calc_pct = df["MW_FLOW"] / df["BINDING_LIMIT"] * 100.0
+    calc_pct_overload = df["OVERLOAD_MW"] / df["BINDING_LIMIT"] * 100.0
+
+    relationship = pd.DataFrame(
+        [
+            {
+                "check": "OVERLOAD_MW ~= MW_FLOW - BINDING_LIMIT",
+                "max_abs_diff": format_float((df["OVERLOAD_MW"] - calc_overload).abs().max(), 4),
+                "match_within_0.01": format_pct(
+                    ((df["OVERLOAD_MW"] - calc_overload).abs() <= 0.01).mean() * 100.0
+                ),
+                "match_within_0.05": format_pct(
+                    ((df["OVERLOAD_MW"] - calc_overload).abs() <= 0.05).mean() * 100.0
+                ),
+            },
+            {
+                "check": "PCT_MW ~= MW_FLOW / BINDING_LIMIT * 100",
+                "max_abs_diff": format_float((df["PCT_MW"] - calc_pct).abs().max(), 4),
+                "match_within_0.01": format_pct(
+                    ((df["PCT_MW"] - calc_pct).abs() <= 0.01).mean() * 100.0
+                ),
+                "match_within_0.05": format_pct(
+                    ((df["PCT_MW"] - calc_pct).abs() <= 0.05).mean() * 100.0
+                ),
+            },
+            {
+                "check": "PCT_MW - 100 ~= OVERLOAD_MW / BINDING_LIMIT * 100",
+                "max_abs_diff": format_float(
+                    (((df["PCT_MW"] - 100.0) - calc_pct_overload * 100.0 / 100.0).abs().max()),
+                    4,
+                ),
+                "match_within_0.01": format_pct(
+                    ((((df["PCT_MW"] - 100.0) - calc_pct_overload).abs()) <= 0.01).mean() * 100.0
+                ),
+                "match_within_0.05": format_pct(
+                    ((((df["PCT_MW"] - 100.0) - calc_pct_overload).abs()) <= 0.05).mean() * 100.0
+                ),
+            },
+        ]
+    )
+
+    equipment_station = (
+        df.groupby("EQUIPMENT_NAME", observed=True)["STATION_NAME"]
+        .agg(["nunique", lambda values: ", ".join(sorted(set(values.astype(str))))])
+        .reset_index()
+        .rename(
+            columns={
+                "EQUIPMENT_NAME": "equipment_name",
+                "nunique": "station_count",
+                "<lambda_0>": "station_names",
+            }
+        )
+        .sort_values(["station_count", "equipment_name"], ascending=[False, True])
+    )
+    equipment_station["station_count"] = equipment_station["station_count"].map(format_int)
+    return relationship, equipment_station
+
+
+def build_rtdcv_top_equipment_table(df: pd.DataFrame, top_n: int = 6) -> pd.DataFrame:
+    top = (
+        df.groupby("EQUIPMENT_NAME", observed=True)
+        .agg(
+            rows=("EQUIPMENT_NAME", "size"),
+            congest_type=("CONGEST_TYPE", lambda s: ", ".join(sorted(set(s.astype(str))))),
+            stations=("STATION_NAME", lambda s: ", ".join(sorted(set(s.astype(str))))),
+            binding_median=("BINDING_LIMIT", "median"),
+            flow_median=("MW_FLOW", "median"),
+            overload_median=("OVERLOAD_MW", "median"),
+            pct_median=("PCT_MW", "median"),
+        )
+        .reset_index()
+        .sort_values("rows", ascending=False)
+        .head(top_n)
+    )
+    total_rows = len(df)
+    top["row_share"] = top["rows"] / total_rows * 100.0
+    top["rows"] = top["rows"].map(format_int)
+    top["row_share"] = top["row_share"].map(format_pct)
+    for column in ["binding_median", "flow_median", "overload_median", "pct_median"]:
+        top[column] = top[column].map(format_float)
+    return top.rename(columns={"EQUIPMENT_NAME": "equipment_name"})
+
+
+def plot_rtdcv_cross_bars(df: pd.DataFrame, axis_column: str, title: str, path: Path) -> None:
+    counts = (
+        df.groupby([axis_column, "CONGEST_TYPE"], observed=True)
+        .size()
+        .unstack(fill_value=0)
+        .sort_values(list(df["CONGEST_TYPE"].astype(str).unique()), ascending=False)
+    )
+    top_counts = counts.sum(axis=1).sort_values(ascending=False).head(12)
+    counts = counts.loc[top_counts.index]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    left = pd.Series(0, index=counts.index, dtype="float64")
+    colors = {"BASE CASE": "#4c72b0", "CONTINGENCY": "#dd8452"}
+    for congest_type in counts.columns:
+        ax.barh(
+            counts.index.astype(str),
+            counts[congest_type].values,
+            left=left.values,
+            label=str(congest_type),
+            color=colors.get(str(congest_type), None),
+        )
+        left += counts[congest_type]
+    ax.set_title(title)
+    ax.set_xlabel("Rows")
+    ax.legend(frameon=False)
+    save_figure(fig, path)
+
+
+def plot_rtdcv_top_equipment_overview(df: pd.DataFrame, path: Path, top_n: int = 6) -> None:
+    top = (
+        df.groupby("EQUIPMENT_NAME", observed=True)
+        .agg(
+            rows=("EQUIPMENT_NAME", "size"),
+            congest_type=("CONGEST_TYPE", lambda s: ", ".join(sorted(set(s.astype(str))))),
+            stations=("STATION_NAME", lambda s: ", ".join(sorted(set(s.astype(str))))),
+        )
+        .reset_index()
+        .sort_values("rows", ascending=False)
+        .head(top_n)
+        .sort_values("rows")
+    )
+    colors = {"BASE CASE": "#4c72b0", "CONTINGENCY": "#dd8452"}
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    bar_colors = [colors.get(value, "#888888") for value in top["congest_type"]]
+    ax.barh(top["EQUIPMENT_NAME"], top["rows"], color=bar_colors, alpha=0.9)
+    ax.set_title("RTDCV: Top 6 Equipment by Rows")
+    ax.set_xlabel("Rows")
+    for idx, (_, row) in enumerate(top.iterrows()):
+        ax.text(
+            row["rows"] * 1.01,
+            idx,
+            f"{row['congest_type']} | {row['stations']}",
+            va="center",
+            fontsize=9,
+        )
+    ax.legend(
+        handles=[
+            plt.Rectangle((0, 0), 1, 1, color=colors["BASE CASE"], label="BASE CASE"),
+            plt.Rectangle((0, 0), 1, 1, color=colors["CONTINGENCY"], label="CONTINGENCY"),
+        ],
+        frameon=False,
+        loc="lower right",
+    )
+    save_figure(fig, path)
+
+
+def plot_rtdcv_top_equipment_station_heatmap(df: pd.DataFrame, path: Path, top_n: int = 6) -> None:
+    top_equipment = (
+        df["EQUIPMENT_NAME"].value_counts().head(top_n).index.tolist()
+    )
+    subset = df[df["EQUIPMENT_NAME"].isin(top_equipment)].copy()
+    pivot = (
+        subset.groupby(["EQUIPMENT_NAME", "STATION_NAME"], observed=True)
+        .size()
+        .unstack(fill_value=0)
+        .loc[top_equipment]
+    )
+    fig, ax = plt.subplots(figsize=(8, 4.8))
+    image = ax.imshow(pivot.values, aspect="auto", cmap="Blues")
+    ax.set_title("RTDCV: Top 6 Equipment x Station Row Counts")
+    ax.set_xticks(range(len(pivot.columns)))
+    ax.set_xticklabels(pivot.columns.astype(str), rotation=35, ha="right")
+    ax.set_yticks(range(len(pivot.index)))
+    ax.set_yticklabels(pivot.index.astype(str))
+    for row_idx in range(pivot.shape[0]):
+        for col_idx in range(pivot.shape[1]):
+            value = int(pivot.iat[row_idx, col_idx])
+            if value:
+                ax.text(col_idx, row_idx, str(value), ha="center", va="center", fontsize=8)
+    fig.colorbar(image, ax=ax, shrink=0.8, label="Rows")
+    save_figure(fig, path)
+
+
+def plot_rtdcv_top_equipment_numeric_boxplots(df: pd.DataFrame, path: Path, top_n: int = 6) -> None:
+    top_equipment = (
+        df["EQUIPMENT_NAME"].value_counts().head(top_n).index.tolist()
+    )
+    subset = df[df["EQUIPMENT_NAME"].isin(top_equipment)].copy()
+    metrics = ["BINDING_LIMIT", "MW_FLOW", "OVERLOAD_MW", "PCT_MW"]
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8))
+    axes_list = list(axes.flatten())
+    for ax, metric in zip(axes_list, metrics):
+        data = [
+            subset.loc[subset["EQUIPMENT_NAME"] == equipment, metric].dropna().values
+            for equipment in top_equipment
+        ]
+        ax.boxplot(data, vert=False, tick_labels=top_equipment, patch_artist=True)
+        ax.set_title(metric)
+        ax.invert_yaxis()
+        ax.grid(True, alpha=0.2)
+    fig.suptitle("RTDCV: Numeric Distributions for Top 6 Equipment", fontsize=12)
+    save_figure(fig, path)
+
+
 def build_markdown(output_markdown: Path, assets_dir: Path) -> str:
     parts: list[str] = []
     parts.append("# RTD Dataset Column Profile")
@@ -355,11 +555,32 @@ def build_markdown(output_markdown: Path, assets_dir: Path) -> str:
         daily_rows_path = assets_dir / f"{dataset_code.lower()}_daily_rows.png"
         numeric_hist_path = assets_dir / f"{dataset_code.lower()}_numeric_hist.png"
         categorical_path = assets_dir / f"{dataset_code.lower()}_top_categories.png"
+        cross_station_path = assets_dir / f"{dataset_code.lower()}_congest_x_station.png"
+        cross_equipment_path = assets_dir / f"{dataset_code.lower()}_congest_x_equipment.png"
+        top6_overview_path = assets_dir / f"{dataset_code.lower()}_top6_equipment_overview.png"
+        top6_station_heatmap_path = assets_dir / f"{dataset_code.lower()}_top6_equipment_station_heatmap.png"
+        top6_numeric_boxplots_path = assets_dir / f"{dataset_code.lower()}_top6_equipment_numeric_boxplots.png"
 
         plot_missingness(df, meta["title"], missingness_path)
         plot_daily_rows(df, meta["title"], daily_rows_path)
         plot_numeric_histograms(df, meta["title"], numeric_hist_path)
         plot_top_categories(df, meta["title"], categorical_path)
+        if dataset_code == "RTDCV":
+            plot_rtdcv_cross_bars(
+                df,
+                axis_column="STATION_NAME",
+                title="RTDCV: Congest Type by Station",
+                path=cross_station_path,
+            )
+            plot_rtdcv_cross_bars(
+                df,
+                axis_column="EQUIPMENT_NAME",
+                title="RTDCV: Congest Type by Equipment",
+                path=cross_equipment_path,
+            )
+            plot_rtdcv_top_equipment_overview(df, top6_overview_path)
+            plot_rtdcv_top_equipment_station_heatmap(df, top6_station_heatmap_path)
+            plot_rtdcv_top_equipment_numeric_boxplots(df, top6_numeric_boxplots_path)
 
         rel_missingness = missingness_path.relative_to(output_markdown.parent)
         rel_daily = daily_rows_path.relative_to(output_markdown.parent)
@@ -395,6 +616,47 @@ def build_markdown(output_markdown: Path, assets_dir: Path) -> str:
             parts.append("### Numeric Columns")
             parts.append("")
             parts.append(markdown_table(num_profile))
+            parts.append("")
+        if dataset_code == "RTDCV":
+            relationship, equipment_station = build_rtdcv_relationship_tables(df)
+            top_equipment = build_rtdcv_top_equipment_table(df)
+            rel_cross_station = cross_station_path.relative_to(output_markdown.parent)
+            rel_cross_equipment = cross_equipment_path.relative_to(output_markdown.parent)
+            rel_top6_overview = top6_overview_path.relative_to(output_markdown.parent)
+            rel_top6_station_heatmap = top6_station_heatmap_path.relative_to(output_markdown.parent)
+            rel_top6_numeric_boxplots = top6_numeric_boxplots_path.relative_to(output_markdown.parent)
+            parts.append("### RTDCV Checks")
+            parts.append("")
+            parts.append(
+                "The limit metrics behave like rounded arithmetic fields: `OVERLOAD_MW` is approximately "
+                "`MW_FLOW - BINDING_LIMIT`, and `PCT_MW` is approximately `MW_FLOW / BINDING_LIMIT * 100`."
+            )
+            parts.append("")
+            parts.append(markdown_table(relationship))
+            parts.append("")
+            parts.append("Equipment-to-station mapping:")
+            parts.append("")
+            parts.append(markdown_table(equipment_station.head(12)))
+            parts.append("")
+            parts.append(f"![RTDCV congest type by station]({rel_cross_station})")
+            parts.append("")
+            parts.append(f"![RTDCV congest type by equipment]({rel_cross_equipment})")
+            parts.append("")
+            parts.append("### RTDCV Top 6 Equipment Deep Dive")
+            parts.append("")
+            parts.append(
+                "These are the six equipment names with the most RTDCV rows in the current window. "
+                "The table and visuals below focus on whether they are base or contingency, "
+                "which stations they map to, and how their numeric fields are distributed."
+            )
+            parts.append("")
+            parts.append(markdown_table(top_equipment))
+            parts.append("")
+            parts.append(f"![RTDCV top 6 equipment overview]({rel_top6_overview})")
+            parts.append("")
+            parts.append(f"![RTDCV top 6 equipment station heatmap]({rel_top6_station_heatmap})")
+            parts.append("")
+            parts.append(f"![RTDCV top 6 equipment numeric boxplots]({rel_top6_numeric_boxplots})")
             parts.append("")
         parts.append("### Categorical / String Value Distributions")
         parts.append("")

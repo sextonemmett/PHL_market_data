@@ -166,6 +166,56 @@ Warning breakdown:
 | OVERLOAD_MW   | 4,082         | 0.00%       | 0.00   | 0.00   | 2.40   | 7.38   | 21.99  | 29.94  | 1,794 | 0        |
 | PCT_MW        | 4,082         | 0.00%       | 100.00 | 100.00 | 101.08 | 103.35 | 110.12 | 111.33 | 0     | 0        |
 
+### RTDCV Checks
+
+The limit metrics behave like rounded arithmetic fields: `OVERLOAD_MW` is approximately `MW_FLOW - BINDING_LIMIT`, and `PCT_MW` is approximately `MW_FLOW / BINDING_LIMIT * 100`.
+
+| check                                             | max_abs_diff | match_within_0.01 | match_within_0.05 |
+|---------------------------------------------------|--------------|-------------------|-------------------|
+| OVERLOAD_MW ~= MW_FLOW - BINDING_LIMIT            | 0.0100       | 92.14%            | 100.00%           |
+| PCT_MW ~= MW_FLOW / BINDING_LIMIT * 100           | 0.0089       | 100.00%           | 100.00%           |
+| PCT_MW - 100 ~= OVERLOAD_MW / BINDING_LIMIT * 100 | 0.0086       | 100.00%           | 100.00%           |
+
+Equipment-to-station mapping:
+
+| equipment_name | station_count | station_names      |
+|----------------|---------------|--------------------|
+| 1BAUA_1LAT1    | 2             | 01BAUANG, 01LATRIN |
+| 1BAUA_1LAT2    | 2             | 01BAUANG, 01LATRIN |
+| 5DAAN_4TAB1    | 2             | 04TABANG, 05DAANBN |
+| 13MATA_13TOR1  | 1             | 13MATAN            |
+| 1ANGAT_TR3     | 1             | 01ANGAT            |
+| 1BALSIK_TR1    | 1             | 01BALSIK           |
+| 1BING_1NGS2    | 1             | 01EHVNAG           |
+| 1EHVNGS_TR1    | 1             | 01EHVNAG           |
+| 1EHVNGS_TR2    | 1             | 01EHVNAG           |
+| 1MEXI_1HER1    | 1             | 01MEXICO           |
+| 1MEXI_1HER2    | 1             | 01MEXICO           |
+| 1SRAF_1SJO1    | 1             | 01SNRAFA           |
+
+![RTDCV congest type by station](rtd_dataset_profile_assets/rtdcv_congest_x_station.png)
+
+![RTDCV congest type by equipment](rtd_dataset_profile_assets/rtdcv_congest_x_equipment.png)
+
+### RTDCV Top 6 Equipment Deep Dive
+
+These are the six equipment names with the most RTDCV rows in the current window. The table and visuals below focus on whether they are base or contingency, which stations they map to, and how their numeric fields are distributed.
+
+| equipment_name | rows  | congest_type | stations           | binding_median | flow_median | overload_median | pct_median | row_share |
+|----------------|-------|--------------|--------------------|----------------|-------------|-----------------|------------|-----------|
+| 5DAAN_4TAB2    | 2,415 | BASE CASE    | 05DAANBN           | 221.93         | 235.28      | 13.03           | 105.88     | 59.16%    |
+| 1BALSIK_TR1    | 760   | CONTINGENCY  | 01BALSIK           | 988.62         | 988.62      | 0.00            | 100.00     | 18.62%    |
+| 5DAAN_4TAB1    | 442   | BASE CASE    | 04TABANG, 05DAANBN | 191.33         | 191.33      | 0.00            | 100.00     | 10.83%    |
+| 1BAUA_1LAT1    | 160   | CONTINGENCY  | 01BAUANG, 01LATRIN | 288.30         | 288.30      | 0.00            | 100.00     | 3.92%     |
+| 1BAUA_1LAT2    | 154   | CONTINGENCY  | 01BAUANG, 01LATRIN | 288.27         | 288.27      | 0.00            | 100.00     | 3.77%     |
+| 1MEXI_1HER2    | 101   | CONTINGENCY  | 01MEXICO           | 461.93         | 462.04      | 0.00            | 100.00     | 2.47%     |
+
+![RTDCV top 6 equipment overview](rtd_dataset_profile_assets/rtdcv_top6_equipment_overview.png)
+
+![RTDCV top 6 equipment station heatmap](rtd_dataset_profile_assets/rtdcv_top6_equipment_station_heatmap.png)
+
+![RTDCV top 6 equipment numeric boxplots](rtd_dataset_profile_assets/rtdcv_top6_equipment_numeric_boxplots.png)
+
 ### Categorical / String Value Distributions
 
 #### `MKT_TYPE`
