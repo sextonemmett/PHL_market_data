@@ -68,7 +68,13 @@ def configure_matplotlib() -> None:
             "grid.alpha": 0.2,
             "axes.spines.top": False,
             "axes.spines.right": False,
-            "font.size": 10,
+            "font.size": 14,
+            "axes.titlesize": 14,
+            "axes.labelsize": 14,
+            "xtick.labelsize": 14,
+            "ytick.labelsize": 14,
+            "legend.fontsize": 14,
+            "figure.titlesize": 14,
         }
     )
 
@@ -529,6 +535,262 @@ def plot_rtdcv_top_equipment_numeric_boxplots(df: pd.DataFrame, path: Path, top_
     save_figure(fig, path)
 
 
+def plot_rtdhs_hvdc_profiles(df: pd.DataFrame, path: Path) -> None:
+    hvdc_specs = [
+        {
+            "name": "VISLUZ1",
+            "title": "Visayas and Luzon Link",
+            "ylabel": "Flow (MW)\nPositive = Visayas to Luzon\nNegative = Luzon to Visayas",
+            "color": "#1f4e79",
+            "positive_label": "Visayas to Luzon",
+            "negative_label": "Luzon to Visayas",
+        },
+        {
+            "name": "MINVIS1",
+            "title": "Mindanao and Visayas Link",
+            "ylabel": "Flow (MW)\nPositive = Mindanao to Visayas\nNegative = Visayas to Mindanao",
+            "color": "#2b8a3e",
+            "positive_label": "Mindanao to Visayas",
+            "negative_label": "Visayas to Mindanao",
+        },
+    ]
+
+    working = df.copy()
+    working["TIME_INTERVAL"] = pd.to_datetime(working["TIME_INTERVAL"])
+    minute_of_day = working["TIME_INTERVAL"].dt.hour * 60 + working["TIME_INTERVAL"].dt.minute
+    working["minute_of_day"] = (minute_of_day // 15) * 15
+    working["hour_of_day"] = working["minute_of_day"] / 60.0
+
+    fig, axes = plt.subplots(2, 1, figsize=(13.5, 8.6), sharex=True)
+    for ax, spec in zip(axes, hvdc_specs):
+        subset = working[working["HVDC_NAME"].astype(str) == spec["name"]].copy()
+        profile = (
+            subset.groupby(["minute_of_day", "hour_of_day"], observed=True)["FLOW_FROM"]
+            .quantile([0.10, 0.25, 0.50, 0.75, 0.90])
+            .unstack()
+            .reset_index()
+            .sort_values("minute_of_day")
+        )
+        profile.columns = [
+            "minute_of_day",
+            "hour_of_day",
+            "q10",
+            "q25",
+            "q50",
+            "q75",
+            "q90",
+        ]
+
+        ax.fill_between(
+            profile["hour_of_day"],
+            profile["q10"],
+            profile["q90"],
+            color=spec["color"],
+            alpha=0.18,
+            label="10-90 band",
+        )
+        ax.fill_between(
+            profile["hour_of_day"],
+            profile["q25"],
+            profile["q75"],
+            color=spec["color"],
+            alpha=0.35,
+            label="25-75 band",
+        )
+        ax.plot(
+            profile["hour_of_day"],
+            profile["q50"],
+            color=spec["color"],
+            linewidth=2.2,
+            label="Median",
+        )
+        ax.axhline(0.0, color="#222222", linewidth=2.0, linestyle="--")
+        ax.set_title(spec["title"])
+        ax.set_ylabel(spec["ylabel"])
+        ax.set_xlim(0, 24)
+        ax.set_xticks(range(0, 25, 4))
+        ax.grid(True, alpha=0.2)
+        ax.text(
+            0.02,
+            0.94,
+            spec["positive_label"],
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            fontsize=9,
+            weight="bold",
+            color=spec["color"],
+            bbox={"boxstyle": "round,pad=0.25", "facecolor": "white", "edgecolor": spec["color"], "alpha": 0.9},
+        )
+        ax.text(
+            0.02,
+            0.06,
+            spec["negative_label"],
+            transform=ax.transAxes,
+            ha="left",
+            va="bottom",
+            fontsize=9,
+            weight="bold",
+            color=spec["color"],
+            bbox={"boxstyle": "round,pad=0.25", "facecolor": "white", "edgecolor": spec["color"], "alpha": 0.9},
+        )
+
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.02))
+    fig.suptitle("RTDHS: Flow Profiles by 15-Minute Interval of Day", fontsize=14, y=1.03)
+    save_figure(fig, path)
+
+
+def plot_rtdhs_congestion_by_direction(df: pd.DataFrame, path: Path) -> None:
+    direction_specs = [
+        {
+            "title": "Visayas to Luzon",
+            "mask": (df["HVDC_NAME"].astype(str) == "VISLUZ1") & (df["FLOW_FROM"] > 0),
+            "color": "#1f4e79",
+        },
+        {
+            "title": "Luzon to Visayas",
+            "mask": (df["HVDC_NAME"].astype(str) == "VISLUZ1") & (df["FLOW_FROM"] < 0),
+            "color": "#5b8cc0",
+        },
+        {
+            "title": "Mindanao to Visayas",
+            "mask": (df["HVDC_NAME"].astype(str) == "MINVIS1") & (df["FLOW_FROM"] > 0),
+            "color": "#2b8a3e",
+        },
+        {
+            "title": "Visayas to Mindanao",
+            "mask": (df["HVDC_NAME"].astype(str) == "MINVIS1") & (df["FLOW_FROM"] < 0),
+            "color": "#78b159",
+        },
+    ]
+
+    working = df.copy()
+    working["TIME_INTERVAL"] = pd.to_datetime(working["TIME_INTERVAL"])
+    minute_of_day = working["TIME_INTERVAL"].dt.hour * 60 + working["TIME_INTERVAL"].dt.minute
+    working["minute_of_day"] = (minute_of_day // 15) * 15
+    working["hour_of_day"] = working["minute_of_day"] / 60.0
+    working["is_congested"] = working["CONGESTION_FLAG"].astype(str).eq("Y")
+
+    fig, axes = plt.subplots(2, 2, figsize=(14, 9), sharex=True, sharey=True)
+    axes_list = list(axes.flatten())
+    for ax, spec in zip(axes_list, direction_specs):
+        subset = working.loc[spec["mask"]].copy()
+        profile = (
+            subset.groupby(["minute_of_day", "hour_of_day"], observed=True)["is_congested"]
+            .mean()
+            .mul(100.0)
+            .reset_index(name="congestion_pct")
+            .sort_values("minute_of_day")
+        )
+
+        ax.bar(
+            profile["hour_of_day"],
+            profile["congestion_pct"],
+            width=0.22,
+            color=spec["color"],
+            alpha=0.9,
+        )
+        ax.set_title(spec["title"])
+        ax.set_ylabel("Intervals congested (%)")
+        ax.set_xlim(0, 24)
+        ax.set_xticks(range(0, 25, 4))
+        ax.set_ylim(0, 100)
+        ax.grid(True, axis="y", alpha=0.2)
+
+    fig.suptitle("RTDHS: Congestion Share by Direction and 15-Minute Interval", fontsize=14, y=1.02)
+    save_figure(fig, path)
+
+
+def plot_rtdhs_direction_frequency(df: pd.DataFrame, path: Path) -> None:
+    not_congested_color = "#9ec3e6"
+    congested_color = "#8b1e1e"
+    direction_specs = [
+        {
+            "title": "Visayas to Luzon",
+            "link": "VISLUZ1",
+            "mask": (df["HVDC_NAME"].astype(str) == "VISLUZ1") & (df["FLOW_FROM"] > 0),
+        },
+        {
+            "title": "Luzon to Visayas",
+            "link": "VISLUZ1",
+            "mask": (df["HVDC_NAME"].astype(str) == "VISLUZ1") & (df["FLOW_FROM"] < 0),
+        },
+        {
+            "title": "Mindanao to Visayas",
+            "link": "MINVIS1",
+            "mask": (df["HVDC_NAME"].astype(str) == "MINVIS1") & (df["FLOW_FROM"] > 0),
+        },
+        {
+            "title": "Visayas to Mindanao",
+            "link": "MINVIS1",
+            "mask": (df["HVDC_NAME"].astype(str) == "MINVIS1") & (df["FLOW_FROM"] < 0),
+        },
+    ]
+
+    working = df.copy()
+    working["TIME_INTERVAL"] = pd.to_datetime(working["TIME_INTERVAL"])
+    minute_of_day = working["TIME_INTERVAL"].dt.hour * 60 + working["TIME_INTERVAL"].dt.minute
+    working["minute_of_day"] = (minute_of_day // 15) * 15
+    working["hour_of_day"] = working["minute_of_day"] / 60.0
+    working["is_congested"] = working["CONGESTION_FLAG"].astype(str).eq("Y")
+
+    fig, axes = plt.subplots(2, 2, figsize=(14, 9), sharex=True, sharey=True)
+    axes_list = list(axes.flatten())
+    for ax, spec in zip(axes_list, direction_specs):
+        base = working.loc[working["HVDC_NAME"].astype(str) == spec["link"]].copy()
+        denom = (
+            base.groupby(["minute_of_day", "hour_of_day"], observed=True)
+            .size()
+            .reset_index(name="total_intervals")
+        )
+
+        subset = working.loc[spec["mask"]].copy()
+        shares = (
+            subset.groupby(["minute_of_day", "hour_of_day", "is_congested"], observed=True)
+            .size()
+            .unstack(fill_value=0)
+            .reset_index()
+        )
+        if False not in shares.columns:
+            shares[False] = 0
+        if True not in shares.columns:
+            shares[True] = 0
+        profile = denom.merge(shares, on=["minute_of_day", "hour_of_day"], how="left").fillna(0)
+        profile["non_congested_pct"] = profile[False] / profile["total_intervals"] * 100.0
+        profile["congested_pct"] = profile[True] / profile["total_intervals"] * 100.0
+        profile = profile.sort_values("minute_of_day")
+
+        ax.bar(
+            profile["hour_of_day"],
+            profile["non_congested_pct"],
+            width=0.22,
+            color=not_congested_color,
+            alpha=0.95,
+            label="Direction, not congested",
+        )
+        ax.bar(
+            profile["hour_of_day"],
+            profile["congested_pct"],
+            width=0.22,
+            bottom=profile["non_congested_pct"],
+            color=congested_color,
+            alpha=0.95,
+            label="Direction, congested",
+        )
+        ax.set_title(spec["title"])
+        ax.set_ylabel("Share of all link intervals (%)")
+        ax.set_xlim(0, 24)
+        ax.set_xticks(range(0, 25, 4))
+        ax.set_ylim(0, 100)
+        ax.grid(True, axis="y", alpha=0.2)
+
+    handles, labels = axes_list[0].get_legend_handles_labels()
+    fig.legend(handles[:2], labels[:2], loc="lower center", ncol=2, frameon=False, bbox_to_anchor=(0.5, -0.02))
+    fig.suptitle("RTDHS: How Often Each Direction Occurs, Split by Congestion", fontsize=14, y=1.02)
+    save_figure(fig, path)
+
+
 def build_markdown(output_markdown: Path, assets_dir: Path) -> str:
     parts: list[str] = []
     parts.append("# RTD Dataset Column Profile")
@@ -560,6 +822,9 @@ def build_markdown(output_markdown: Path, assets_dir: Path) -> str:
         top6_overview_path = assets_dir / f"{dataset_code.lower()}_top6_equipment_overview.png"
         top6_station_heatmap_path = assets_dir / f"{dataset_code.lower()}_top6_equipment_station_heatmap.png"
         top6_numeric_boxplots_path = assets_dir / f"{dataset_code.lower()}_top6_equipment_numeric_boxplots.png"
+        hvdc_profile_path = assets_dir / f"{dataset_code.lower()}_hvdc_intraday_profile.png"
+        hvdc_congestion_path = assets_dir / f"{dataset_code.lower()}_hvdc_congestion_by_direction.png"
+        hvdc_frequency_path = assets_dir / f"{dataset_code.lower()}_hvdc_direction_frequency.png"
 
         plot_missingness(df, meta["title"], missingness_path)
         plot_daily_rows(df, meta["title"], daily_rows_path)
@@ -581,11 +846,18 @@ def build_markdown(output_markdown: Path, assets_dir: Path) -> str:
             plot_rtdcv_top_equipment_overview(df, top6_overview_path)
             plot_rtdcv_top_equipment_station_heatmap(df, top6_station_heatmap_path)
             plot_rtdcv_top_equipment_numeric_boxplots(df, top6_numeric_boxplots_path)
+        if dataset_code == "RTDHS":
+            plot_rtdhs_hvdc_profiles(df, hvdc_profile_path)
+            plot_rtdhs_congestion_by_direction(df, hvdc_congestion_path)
+            plot_rtdhs_direction_frequency(df, hvdc_frequency_path)
 
         rel_missingness = missingness_path.relative_to(output_markdown.parent)
         rel_daily = daily_rows_path.relative_to(output_markdown.parent)
         rel_numeric = numeric_hist_path.relative_to(output_markdown.parent)
         rel_categorical = categorical_path.relative_to(output_markdown.parent)
+        rel_hvdc_profile = hvdc_profile_path.relative_to(output_markdown.parent)
+        rel_hvdc_congestion = hvdc_congestion_path.relative_to(output_markdown.parent)
+        rel_hvdc_frequency = hvdc_frequency_path.relative_to(output_markdown.parent)
 
         parts.append(f"## {dataset_code}: {meta['title']}")
         parts.append("")
@@ -657,6 +929,37 @@ def build_markdown(output_markdown: Path, assets_dir: Path) -> str:
             parts.append(f"![RTDCV top 6 equipment station heatmap]({rel_top6_station_heatmap})")
             parts.append("")
             parts.append(f"![RTDCV top 6 equipment numeric boxplots]({rel_top6_numeric_boxplots})")
+            parts.append("")
+        if dataset_code == "RTDHS":
+            parts.append("### RTDHS Intraday Flow Profiles")
+            parts.append("")
+            parts.append(
+                "Each panel summarizes `FLOW_FROM` by 15-minute interval-of-day for one HVDC name. "
+                "The darker band is the 25-75 percentile range, the lighter band is the 10-90 range, "
+                "and the solid line is the median. The dashed horizontal line marks zero flow."
+            )
+            parts.append("")
+            parts.append(f"![RTDHS intraday flow profiles]({rel_hvdc_profile})")
+            parts.append("")
+            parts.append("### RTDHS Congestion Share by Direction")
+            parts.append("")
+            parts.append(
+                "These four panels split the two links into their nonzero flow directions. "
+                "For each 15-minute interval-of-day, the bar height is the percentage of directional intervals "
+                "with `CONGESTION_FLAG = Y`, excluding zero-flow intervals from the denominator."
+            )
+            parts.append("")
+            parts.append(f"![RTDHS congestion share by direction]({rel_hvdc_congestion})")
+            parts.append("")
+            parts.append("### RTDHS Direction Frequency with Congestion Split")
+            parts.append("")
+            parts.append(
+                "This companion view keeps the same four directional panels, but changes the denominator to all "
+                "intervals for that link and time bucket. Each stacked bar shows how often the link is flowing in "
+                "that direction at that time, split into non-congested and congested intervals."
+            )
+            parts.append("")
+            parts.append(f"![RTDHS direction frequency with congestion split]({rel_hvdc_frequency})")
             parts.append("")
         parts.append("### Categorical / String Value Distributions")
         parts.append("")

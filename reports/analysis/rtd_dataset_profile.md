@@ -333,6 +333,24 @@ Warning breakdown:
 | FLOW_TO     | 52,372        | 0.00%       | -450.00 | -388.05 | -71.69 | -78.23 | 180.00 | 366.66 | 3,366 | 31,930   |
 | OVERLOAD_MW | 0             | 100.00%     |         |         |        |        |        |        | 0     | 0        |
 
+### RTDHS Intraday Flow Profiles
+
+Each panel summarizes `FLOW_FROM` by 15-minute interval-of-day for one HVDC name. The darker band is the 25-75 percentile range, the lighter band is the 10-90 range, and the solid line is the median. The dashed horizontal line marks zero flow.
+
+![RTDHS intraday flow profiles](rtd_dataset_profile_assets/rtdhs_hvdc_intraday_profile.png)
+
+### RTDHS Congestion Share by Direction
+
+These four panels split the two links into their nonzero flow directions. For each 15-minute interval-of-day, the bar height is the percentage of directional intervals with `CONGESTION_FLAG = Y`, excluding zero-flow intervals from the denominator.
+
+![RTDHS congestion share by direction](rtd_dataset_profile_assets/rtdhs_hvdc_congestion_by_direction.png)
+
+### RTDHS Direction Frequency with Congestion Split
+
+This companion view keeps the same four directional panels, but changes the denominator to all intervals for that link and time bucket. Each stacked bar shows how often the link is flowing in that direction at that time, split into non-congested and congested intervals.
+
+![RTDHS direction frequency with congestion split](rtd_dataset_profile_assets/rtdhs_hvdc_direction_frequency.png)
+
 ### Categorical / String Value Distributions
 
 #### `MKT_TYPE`

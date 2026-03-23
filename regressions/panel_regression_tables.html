@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Panel Regression Tables</title>
+  <style>
+body { font-family: Georgia, "Times New Roman", serif; margin: 32px auto; max-width: 1280px; color: #102a43; line-height: 1.55; background: #f4f1ea; }
+h1, h2 { color: #0b1f33; }
+h1 { margin-bottom: 10px; }
+h2 { margin: 0 0 14px; }
+p { margin: 0 0 14px; }
+code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px; }
+.lead { font-size: 17px; color: #243b53; margin-bottom: 24px; }
+.spec-card { background: #faf7f1; border: 1px solid #d9e2ec; border-radius: 14px; padding: 22px 24px; margin: 26px 0 32px; box-shadow: 0 10px 28px rgba(16, 42, 67, 0.08); }
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin: 0 0 16px; }
+.meta-grid div { background: #eef3f7; border-radius: 10px; padding: 10px 12px; }
+.meta-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #486581; margin-bottom: 4px; }
+.formula-inline { color: #0b1f33; font-size: 18px; }
+.spec-description { color: #243b53; margin-bottom: 14px; }
+.formula-box { background: #102a43; color: #fdfdfd; border-radius: 12px; padding: 14px 16px; margin: 0 0 18px; }
+.formula-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; margin-bottom: 8px; }
+.formula { font-size: 18px; line-height: 1.5; }
+.reg-table { border-collapse: collapse; width: 100%; margin: 18px 0 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(16, 42, 67, 0.10); }
+.reg-table th { background: #0b1f33; color: #fdfdfd; padding: 11px 12px; text-align: center; border: 1px solid #102a43; }
+.reg-table td { border: 1px solid #bcccdc; padding: 9px 12px; vertical-align: top; background: #fffdf8; color: #102a43; }
+.reg-table td:first-child { font-weight: 600; width: 340px; background: #e6ecf2; color: #0b1f33; }
+.reg-table tr:nth-child(even) td:not(:first-child) { background: #eef3f7; }
+.notes { color: #243b53; font-size: 14px; background: #e6ecf2; border-radius: 12px; padding: 16px 18px; margin-top: 28px; }
+</style>
+</head>
+<body>
+  <h1>Panel Regression Tables</h1>
+  <p class="lead">These regressions use <code>statsmodels</code> OLS with <code>HC1</code> robust standard errors and no 5-minute slot fixed effects. Specifications 1 through 5 report the same congestion design under four calendar fixed-effect options: none, month, week, and day. Specification 6 instead reports separate day-FE regressions for Luzon, Visayas, and Mindanao focal-island samples.</p>
+
+  
+  <section class="spec-card">
+    <h2>Specification 1: Direct Pair Panel, Binary Equipment Congestion</h2>
+    <div class="meta-grid">
+      <div><span class="meta-label">Source panel</span><code>data/panels/RTD_DIRECT_PAIR_PANEL_202512212305_202603190000.parquet</code></div>
+      <div><span class="meta-label">Unit of observation</span><span>Island-pair by 5-minute interval</span></div>
+      <div><span class="meta-label">Dependent variable</span><span class="formula-inline"><em>|P<sub>i,t</sub> - P<sub>j,t</sub>|</em></span></div>
+      <div><span class="meta-label">Interpretation</span><span>Absolute price gap between the two directly connected islands at 5-minute interval t (PHP/MWh).</span></div>
+    </div>
+    <p class="spec-description">Uses binary congestion indicators for island-specific equipment congestion together with a binary inter-island link congestion indicator.</p>
+    <div class="formula-box">
+      <div class="formula-label">Regression specification</div>
+      <div class="formula"><em>|P<sub>i,t</sub> - P<sub>j,t</sub>|</em> = &beta;<sub>1</sub> Link congestion + &beta;<sub>2</sub> Equipment congestion (island 1) + &beta;<sub>3</sub> Equipment congestion (island 2) + &gamma;<sub>1</sub> Demand (island 1) + &gamma;<sub>2</sub> Demand (island 2) + &gamma;<sub>3</sub> Total demand + calendar fixed effects + &epsilon;<sub>i,j,t</sub></div>
+    </div>
+    <table border="1" class="dataframe reg-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Variable</th>
+      <th>No FE</th>
+      <th>Month FE</th>
+      <th>Week FE</th>
+      <th>Day FE</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Inter-island link congestion indicator (1 = congested)</td>
+      <td>4,551.5250***<br>(107.0143)</td>
+      <td>4,571.6119***<br>(107.8725)</td>
+      <td>4,640.0672***<br>(111.3651)</td>
+      <td>4,291.4886***<br>(129.4416)</td>
+    </tr>
+    <tr>
+      <td>Equipment congestion indicator, island 1 (1 = any congested resource)</td>
+      <td>6,264.8269***<br>(445.1243)</td>
+      <td>6,431.4106***<br>(467.3656)</td>
+      <td>6,625.8021***<br>(507.6958)</td>
+      <td>6,351.1061***<br>(502.3521)</td>
+    </tr>
+    <tr>
+      <td>Equipment congestion indicator, island 2 (1 = any congested resource)</td>
+      <td>641.5274**<br>(279.5245)</td>
+      <td>889.9098***<br>(316.3262)</td>
+      <td>1,009.9296***<br>(334.9231)</td>
+      <td>885.5160**<br>(344.1916)</td>
+    </tr>
+    <tr>
+      <td>Island 1 demand (MWh requirement)</td>
+      <td>0.1162***<br>(0.0113)</td>
+      <td>0.1538***<br>(0.0125)</td>
+      <td>0.1209***<br>(0.0135)</td>
+      <td>0.1196***<br>(0.0142)</td>
+    </tr>
+    <tr>
+      <td>Island 2 demand (MWh requirement)</td>
+      <td>-0.7095<br>(0.4849)</td>
+      <td>1.1822**<br>(0.5766)</td>
+      <td>-0.1830<br>(0.9445)</td>
+      <td>-1.0127<br>(0.9652)</td>
+    </tr>
+    <tr>
+      <td>Total system demand across three islands (MWh requirement)</td>
+      <td>0.5725***<br>(0.0794)</td>
+      <td>0.2283**<br>(0.0979)</td>
+      <td>0.5350***<br>(0.1680)</td>
+      <td>0.6880***<br>(0.1746)</td>
+    </tr>
+    <tr>
+      <td>Observations</td>
+      <td>50,092</td>
+      <td>50,092</td>
+      <td>50,092</td>
+      <td>50,092</td>
+    </tr>
+    <tr>
+      <td>R-squared</td>
+      <td>0.111</td>
+      <td>0.114</td>
+      <td>0.125</td>
+      <td>0.167</td>
+    </tr>
+    <tr>
+      <td>Dependent variable</td>
+      <td>|P<sub>i,t</sub> - P<sub>j,t</sub>| (PHP/MWh)</td>
+      <td>|P<sub>i,t</sub> - P<sub>j,t</sub>| (PHP/MWh)</td>
+      <td>|P<sub>i,t</sub> - P<sub>j,t</sub>| (PHP/MWh)</td>
+      <td>|P<sub>i,t</sub> - P<sub>j,t</sub>| (PHP/MWh)</td>
+    </tr>
+    <tr>
+      <td>Calendar FE</td>
+      <td>No FE</td>
+      <td>Month FE</td>
+      <td>Week FE</td>
+      <td>Day FE</td>
+    </tr>
+    <tr>
+      <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="spec-card">
+    <h2>Specification 2: Direct Pair Panel, Percent Equipment Congestion</h2>
+    <div class="meta-grid">
+      <div><span class="meta-label">Source panel</span><code>data/panels/RTD_DIRECT_PAIR_PANEL_202512212305_202603190000.parquet</code></div>
+      <div><span class="meta-label">Unit of observation</span><span>Island-pair by 5-minute interval</span></div>
+      <div><span class="meta-label">Dependent variable</span><span class="formula-inline"><em>|P<sub>i,t</sub> - P<sub>j,t</sub>|</em></span></div>
+      <div><span class="meta-label">Interpretation</span><span>Absolute price gap between the two directly connected islands at 5-minute interval t (PHP/MWh).</span></div>
+    </div>
+    <p class="spec-description">Replaces binary equipment congestion indicators with the summed overload margin on each side of the pair, measured in percentage points above 100% loading.</p>
+    <div class="formula-box">
+      <div class="formula-label">Regression specification</div>
+      <div class="formula"><em>|P<sub>i,t</sub> - P<sub>j,t</sub>|</em> = &beta;<sub>1</sub> Link congestion + &beta;<sub>2</sub> Overload margin sum (island 1) + &beta;<sub>3</sub> Overload margin sum (island 2) + &gamma;<sub>1</sub> Demand (island 1) + &gamma;<sub>2</sub> Demand (island 2) + &gamma;<sub>3</sub> Total demand + calendar fixed effects + &epsilon;<sub>i,j,t</sub></div>
+    </div>
+    <table border="1" class="dataframe reg-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Variable</th>
+      <th>No FE</th>
+      <th>Month FE</th>
+      <th>Week FE</th>
+      <th>Day FE</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Inter-island link congestion indicator (1 = congested)</td>
+      <td>4,366.0475***<br>(125.3935)</td>
+      <td>4,327.1855***<br>(127.6643)</td>
+      <td>4,500.8081***<br>(128.7199)</td>
+      <td>4,215.9790***<br>(148.8737)</td>
+    </tr>
+    <tr>
+      <td>Sum of equipment overload margins, island 1 (sum of PCT_MW - 100, pct points)</td>
+      <td>377.4119***<br>(23.9870)</td>
+      <td>370.2105***<br>(24.4841)</td>
+      <td>367.3869***<br>(24.4547)</td>
+      <td>304.4895***<br>(23.5820)</td>
+    </tr>
+    <tr>
+      <td>Sum of equipment overload margins, island 2 (sum of PCT_MW - 100, pct points)</td>
+      <td>-73.7753***<br>(22.9866)</td>
+      <td>-75.3665***<br>(23.2546)</td>
+      <td>-88.6400***<br>(23.6215)</td>
+      <td>-134.6233***<br>(22.5689)</td>
+    </tr>
+    <tr>
+      <td>Island 1 demand (MWh requirement)</td>
+      <td>0.1309***<br>(0.0117)</td>
+      <td>0.1539***<br>(0.0129)</td>
+      <td>0.1481***<br>(0.0150)</td>
+      <td>0.1588***<br>(0.0154)</td>
+    </tr>
+    <tr>
+      <td>Island 2 demand (MWh requirement)</td>
+      <td>-0.4304<br>(0.4597)</td>
+      <td>0.5654<br>(0.5863)</td>
+      <td>0.6414<br>(0.8968)</td>
+      <td>0.5593<br>(0.8766)</td>
+    </tr>
+    <tr>
+      <td>Total system demand across three islands (MWh requirement)</td>
+      <td>0.6487***<br>(0.0864)</td>
+      <td>0.4682***<br>(0.1076)</td>
+      <td>0.5162***<br>(0.1688)</td>
+      <td>0.5154***<br>(0.1668)</td>
+    </tr>
+    <tr>
+      <td>Observations</td>
+      <td>50,092</td>
+      <td>50,092</td>
+      <td>50,092</td>
+      <td>50,092</td>
+    </tr>
+    <tr>
+      <td>R-squared</td>
+      <td>0.084</td>
+      <td>0.086</td>
+      <td>0.098</td>
+      <td>0.144</td>
+    </tr>
+    <tr>
+      <td>Dependent variable</td>
+      <td>|P<sub>i,t</sub> - P<sub>j,t</sub>| (PHP/MWh)</td>
+      <td>|P<sub>i,t</sub> - P<sub>j,t</sub>| (PHP/MWh)</td>
+      <td>|P<sub>i,t</sub> - P<sub>j,t</sub>| (PHP/MWh)</td>
+      <td>|P<sub>i,t</sub> - P<sub>j,t</sub>| (PHP/MWh)</td>
+    </tr>
+    <tr>
+      <td>Calendar FE</td>
+      <td>No FE</td>
+      <td>Month FE</td>
+      <td>Week FE</td>
+      <td>Day FE</td>
+    </tr>
+    <tr>
+      <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="spec-card">
+    <h2>Specification 3: Island-System Panel, Binary Equipment Congestion</h2>
+    <div class="meta-grid">
+      <div><span class="meta-label">Source panel</span><code>data/panels/RTD_ISLAND_SYSTEM_PANEL_202512212305_202603210000.parquet</code></div>
+      <div><span class="meta-label">Unit of observation</span><span>Island by 5-minute interval</span></div>
+      <div><span class="meta-label">Dependent variable</span><span class="formula-inline"><em>|P<sub>i,t</sub> - P<sub>sys,t</sub>|</em></span></div>
+      <div><span class="meta-label">Interpretation</span><span>Absolute deviation between an island price and the demand-weighted system price at 5-minute interval t (PHP/MWh).</span></div>
+    </div>
+    <p class="spec-description">Uses a binary indicator for whether any mapped congested equipment appears in the island during the interval.</p>
+    <div class="formula-box">
+      <div class="formula-label">Regression specification</div>
+      <div class="formula"><em>|P<sub>i,t</sub> - P<sub>sys,t</sub>|</em> = &beta;<sub>1</sub> Equipment congestion + &gamma;<sub>1</sub> Island demand + &gamma;<sub>2</sub> Total demand + calendar fixed effects + &epsilon;<sub>i,t</sub></div>
+    </div>
+    <table border="1" class="dataframe reg-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Variable</th>
+      <th>No FE</th>
+      <th>Month FE</th>
+      <th>Week FE</th>
+      <th>Day FE</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Equipment congestion indicator (1 = any congested resource in island)</td>
+      <td>1,906.5500***<br>(200.7419)</td>
+      <td>1,836.1869***<br>(204.4744)</td>
+      <td>1,797.8729***<br>(212.5496)</td>
+      <td>1,446.8760***<br>(203.1020)</td>
+    </tr>
+    <tr>
+      <td>Island demand (MWh requirement)</td>
+      <td>-0.2055***<br>(0.0064)</td>
+      <td>-0.2055***<br>(0.0063)</td>
+      <td>-0.2056***<br>(0.0062)</td>
+      <td>-0.2057***<br>(0.0059)</td>
+    </tr>
+    <tr>
+      <td>Total system demand across three islands (MWh requirement)</td>
+      <td>0.8541***<br>(0.0178)</td>
+      <td>0.8388***<br>(0.0160)</td>
+      <td>0.9370***<br>(0.0201)</td>
+      <td>0.9399***<br>(0.0174)</td>
+    </tr>
+    <tr>
+      <td>Observations</td>
+      <td>76,866</td>
+      <td>76,866</td>
+      <td>76,866</td>
+      <td>76,866</td>
+    </tr>
+    <tr>
+      <td>R-squared</td>
+      <td>0.053</td>
+      <td>0.059</td>
+      <td>0.079</td>
+      <td>0.165</td>
+    </tr>
+    <tr>
+      <td>Dependent variable</td>
+      <td>|P<sub>i,t</sub> - P<sub>sys,t</sub>| (PHP/MWh)</td>
+      <td>|P<sub>i,t</sub> - P<sub>sys,t</sub>| (PHP/MWh)</td>
+      <td>|P<sub>i,t</sub> - P<sub>sys,t</sub>| (PHP/MWh)</td>
+      <td>|P<sub>i,t</sub> - P<sub>sys,t</sub>| (PHP/MWh)</td>
+    </tr>
+    <tr>
+      <td>Calendar FE</td>
+      <td>No FE</td>
+      <td>Month FE</td>
+      <td>Week FE</td>
+      <td>Day FE</td>
+    </tr>
+    <tr>
+      <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="spec-card">
+    <h2>Specification 4: Island-System Panel, Percent Equipment Congestion</h2>
+    <div class="meta-grid">
+      <div><span class="meta-label">Source panel</span><code>data/panels/RTD_ISLAND_SYSTEM_PANEL_202512212305_202603210000.parquet</code></div>
+      <div><span class="meta-label">Unit of observation</span><span>Island by 5-minute interval</span></div>
+      <div><span class="meta-label">Dependent variable</span><span class="formula-inline"><em>|P<sub>i,t</sub> - P<sub>sys,t</sub>|</em></span></div>
+      <div><span class="meta-label">Interpretation</span><span>Absolute deviation between an island price and the demand-weighted system price at 5-minute interval t (PHP/MWh).</span></div>
+    </div>
+    <p class="spec-description">Uses the summed equipment overload margin in the island, measured as the interval sum of PCT_MW - 100 across mapped congested resources.</p>
+    <div class="formula-box">
+      <div class="formula-label">Regression specification</div>
+      <div class="formula"><em>|P<sub>i,t</sub> - P<sub>sys,t</sub>|</em> = &beta;<sub>1</sub> Overload margin sum + &gamma;<sub>1</sub> Island demand + &gamma;<sub>2</sub> Total demand + calendar fixed effects + &epsilon;<sub>i,t</sub></div>
+    </div>
+    <table border="1" class="dataframe reg-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Variable</th>
+      <th>No FE</th>
+      <th>Month FE</th>
+      <th>Week FE</th>
+      <th>Day FE</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Sum of equipment overload margins (sum of PCT_MW - 100, pct points)</td>
+      <td>117.6145***<br>(18.6213)</td>
+      <td>79.5058***<br>(18.2728)</td>
+      <td>106.8508***<br>(17.6333)</td>
+      <td>109.2294***<br>(16.8359)</td>
+    </tr>
+    <tr>
+      <td>Island demand (MWh requirement)</td>
+      <td>-0.2016***<br>(0.0065)</td>
+      <td>-0.2032***<br>(0.0065)</td>
+      <td>-0.2021***<br>(0.0064)</td>
+      <td>-0.2020***<br>(0.0060)</td>
+    </tr>
+    <tr>
+      <td>Total system demand across three islands (MWh requirement)</td>
+      <td>0.8720***<br>(0.0177)</td>
+      <td>0.8609***<br>(0.0158)</td>
+      <td>0.9514***<br>(0.0200)</td>
+      <td>0.9468***<br>(0.0171)</td>
+    </tr>
+    <tr>
+      <td>Observations</td>
+      <td>76,866</td>
+      <td>76,866</td>
+      <td>76,866</td>
+      <td>76,866</td>
+    </tr>
+    <tr>
+      <td>R-squared</td>
+      <td>0.050</td>
+      <td>0.056</td>
+      <td>0.077</td>
+      <td>0.163</td>
+    </tr>
+    <tr>
+      <td>Dependent variable</td>
+      <td>|P<sub>i,t</sub> - P<sub>sys,t</sub>| (PHP/MWh)</td>
+      <td>|P<sub>i,t</sub> - P<sub>sys,t</sub>| (PHP/MWh)</td>
+      <td>|P<sub>i,t</sub> - P<sub>sys,t</sub>| (PHP/MWh)</td>
+      <td>|P<sub>i,t</sub> - P<sub>sys,t</sub>| (PHP/MWh)</td>
+    </tr>
+    <tr>
+      <td>Calendar FE</td>
+      <td>No FE</td>
+      <td>Month FE</td>
+      <td>Week FE</td>
+      <td>Day FE</td>
+    </tr>
+    <tr>
+      <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="spec-card">
+    <h2>Specification 5: Focal-Island Price Panel, Percent Equipment Congestion</h2>
+    <div class="meta-grid">
+      <div><span class="meta-label">Source panel</span><code>data/panels/RTD_ISLAND_CONGESTION_PANEL_202512212305_202603210000.parquet</code></div>
+      <div><span class="meta-label">Unit of observation</span><span>Focal island by 5-minute interval</span></div>
+      <div><span class="meta-label">Dependent variable</span><span class="formula-inline"><em>P<sub>i,t</sub></em></span></div>
+      <div><span class="meta-label">Interpretation</span><span>Price in the focal island at 5-minute interval t (PHP/MWh).</span></div>
+    </div>
+    <p class="spec-description">Relates focal-island price to overload margin sums in Luzon, Visayas, and Mindanao, plus focal-island demand. Island fixed effects are included in every column.</p>
+    <div class="formula-box">
+      <div class="formula-label">Regression specification</div>
+      <div class="formula"><em>P<sub>i,t</sub></em> = &beta;<sub>1</sub> Luzon overload margin sum + &beta;<sub>2</sub> Visayas overload margin sum + &beta;<sub>3</sub> Mindanao overload margin sum + &gamma;<sub>1</sub> Focal-island demand + island fixed effects + calendar fixed effects + &epsilon;<sub>i,t</sub></div>
+    </div>
+    <table border="1" class="dataframe reg-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Variable</th>
+      <th>No FE</th>
+      <th>Month FE</th>
+      <th>Week FE</th>
+      <th>Day FE</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Luzon overload margin sum (sum of PCT_MW - 100, pct points)</td>
+      <td>-187.5690<br>(1,288.2327)</td>
+      <td>-186.3937<br>(1,288.7435)</td>
+      <td>-397.3036<br>(1,290.5039)</td>
+      <td>-353.5221<br>(1,291.3481)</td>
+    </tr>
+    <tr>
+      <td>Visayas overload margin sum (sum of PCT_MW - 100, pct points)</td>
+      <td>-251.0074***<br>(11.8282)</td>
+      <td>-313.6813***<br>(12.0432)</td>
+      <td>-319.1179***<br>(12.9171)</td>
+      <td>-359.0701***<br>(12.9764)</td>
+    </tr>
+    <tr>
+      <td>Mindanao overload margin sum (sum of PCT_MW - 100, pct points)</td>
+      <td>No overloads in sample</td>
+      <td>No overloads in sample</td>
+      <td>No overloads in sample</td>
+      <td>No overloads in sample</td>
+    </tr>
+    <tr>
+      <td>Focal island demand (MWh requirement)</td>
+      <td>1.5121***<br>(0.0629)</td>
+      <td>1.6023***<br>(0.0593)</td>
+      <td>1.2968***<br>(0.0668)</td>
+      <td>0.9702***<br>(0.0619)</td>
+    </tr>
+    <tr>
+      <td>Observations</td>
+      <td>76,866</td>
+      <td>76,866</td>
+      <td>76,866</td>
+      <td>76,866</td>
+    </tr>
+    <tr>
+      <td>R-squared</td>
+      <td>0.034</td>
+      <td>0.036</td>
+      <td>0.066</td>
+      <td>0.109</td>
+    </tr>
+    <tr>
+      <td>Dependent variable</td>
+      <td>P<sub>i,t</sub> (PHP/MWh)</td>
+      <td>P<sub>i,t</sub> (PHP/MWh)</td>
+      <td>P<sub>i,t</sub> (PHP/MWh)</td>
+      <td>P<sub>i,t</sub> (PHP/MWh)</td>
+    </tr>
+    <tr>
+      <td>Calendar FE</td>
+      <td>No FE</td>
+      <td>Month FE</td>
+      <td>Week FE</td>
+      <td>Day FE</td>
+    </tr>
+    <tr>
+      <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="spec-card">
+    <h2>Specification 6: Focal-Island Price Panel, Separate by Focal Island</h2>
+    <div class="meta-grid">
+      <div><span class="meta-label">Source panel</span><code>data/panels/RTD_ISLAND_CONGESTION_PANEL_202512212305_202603210000.parquet</code></div>
+      <div><span class="meta-label">Unit of observation</span><span>Focal island by 5-minute interval</span></div>
+      <div><span class="meta-label">Dependent variable</span><span class="formula-inline"><em>P<sub>i,t</sub></em></span></div>
+      <div><span class="meta-label">Interpretation</span><span>Price in the focal island at 5-minute interval t (PHP/MWh).</span></div>
+    </div>
+    <p class="spec-description">Runs the same percent-congestion specification separately for Luzon, Visayas, and Mindanao focal-island rows, using day fixed effects within each island-specific sample.</p>
+    <div class="formula-box">
+      <div class="formula-label">Regression specification</div>
+      <div class="formula"><em>P<sub>i,t</sub></em> = &beta;<sub>1</sub> Luzon overload margin sum + &beta;<sub>2</sub> Visayas overload margin sum + &beta;<sub>3</sub> Mindanao overload margin sum + &gamma;<sub>1</sub> Focal-island demand + day fixed effects + &epsilon;<sub>i,t</sub></div>
+    </div>
+    <table border="1" class="dataframe reg-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Variable</th>
+      <th>Luzon</th>
+      <th>Visayas</th>
+      <th>Mindanao</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Luzon overload margin sum (sum of PCT_MW - 100, pct points)</td>
+      <td>-3,715.3809*<br>(2,017.3591)</td>
+      <td>1,241.6936<br>(1,156.6184)</td>
+      <td>1,106.6256<br>(1,144.0616)</td>
+    </tr>
+    <tr>
+      <td>Visayas overload margin sum (sum of PCT_MW - 100, pct points)</td>
+      <td>-159.4082***<br>(10.0825)</td>
+      <td>-943.8150***<br>(28.9461)</td>
+      <td>-432.2303***<br>(15.0243)</td>
+    </tr>
+    <tr>
+      <td>Mindanao overload margin sum (sum of PCT_MW - 100, pct points)</td>
+      <td>No overloads in sample</td>
+      <td>No overloads in sample</td>
+      <td>No overloads in sample</td>
+    </tr>
+    <tr>
+      <td>Focal island demand (MWh requirement)</td>
+      <td>0.2198***<br>(0.0630)</td>
+      <td>13.7779***<br>(0.1761)</td>
+      <td>12.6677***<br>(0.1488)</td>
+    </tr>
+    <tr>
+      <td>Observations</td>
+      <td>25,622</td>
+      <td>25,622</td>
+      <td>25,622</td>
+    </tr>
+    <tr>
+      <td>R-squared</td>
+      <td>0.175</td>
+      <td>0.303</td>
+      <td>0.433</td>
+    </tr>
+    <tr>
+      <td>Dependent variable</td>
+      <td>P<sub>i,t</sub> (PHP/MWh)</td>
+      <td>P<sub>i,t</sub> (PHP/MWh)</td>
+      <td>P<sub>i,t</sub> (PHP/MWh)</td>
+    </tr>
+    <tr>
+      <td>Calendar FE</td>
+      <td>Day FE</td>
+      <td>Day FE</td>
+      <td>Day FE</td>
+    </tr>
+    <tr>
+      <td>Sample</td>
+      <td>Luzon</td>
+      <td>Visayas</td>
+      <td>Mindanao</td>
+    </tr>
+    <tr>
+      <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+
+  <div class="notes">
+    <p>FE variants shown are <code>No FE</code>, <code>Month FE</code>, <code>Week FE</code>, and <code>Day FE</code> for Specifications 1 through 5. Specification 6 is estimated separately by focal island with <code>Day FE</code> in each island-specific sample.</p>
+    <p>Significance stars: <code>* p&lt;0.10</code>, <code>** p&lt;0.05</code>, <code>*** p&lt;0.01</code>.</p>
+    <p>Full tidy coefficient export: <code>regressions/panel_regression_coefficients.csv</code></p>
+  </div>
+</body>
+</html>

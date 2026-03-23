@@ -108,3 +108,47 @@ RTDHS_CONFIG = DatasetConfig(
         required_values_by_column={"HVDC_NAME": ("MINVIS1", "VISLUZ1")},
     ),
 )
+
+RTDREG_CONFIG = DatasetConfig(
+    dataset_code="RTDREG",
+    description="RTD regional summaries",
+    page_url="https://www.iemop.ph/market-data/rtd-regional-summaries/",
+    md_file_prefix="/var/www/html/wp-content/uploads/downloads/data/RTDREG/RTDREG_",
+    output_root="data/rtd_regional_summaries",
+    raw_filename_prefix="RTDREG",
+    qc_manifest_prefix="rtdreg_qc",
+    combined_filename_prefix="RTDREG",
+    raw_header=(
+        "RUN_TIME",
+        "MKT_TYPE",
+        "TIME_INTERVAL",
+        "REGION_NAME",
+        "COMMODITY_TYPE",
+        "MKT_REQT",
+        "LOAD_BID",
+        "LOAD_CURTAILED",
+        "LOSSES",
+        "GENERATION",
+        "MKT_IMPORT",
+        "MKT_EXPORT",
+        "",
+    ),
+    timestamp_columns=("RUN_TIME", "TIME_INTERVAL"),
+    numeric_columns=(
+        "MKT_REQT",
+        "LOAD_BID",
+        "LOAD_CURTAILED",
+        "LOSSES",
+        "GENERATION",
+        "MKT_IMPORT",
+        "MKT_EXPORT",
+    ),
+    interval_expectation=IntervalExpectation(
+        interval_column="TIME_INTERVAL",
+        expected_count=288,
+        required_values_by_column={
+            "REGION_NAME": ("CLUZ", "CVIS", "CMIN"),
+            "COMMODITY_TYPE": ("En", "Dr", "Fr", "Rd", "Ru"),
+        },
+    ),
+)
