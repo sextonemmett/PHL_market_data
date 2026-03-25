@@ -814,8 +814,9 @@ def summarize(results: list[FileCheck]) -> str:
     )
 
 
-def run_pipeline(config: DatasetConfig) -> int:
-    args = parse_args(config)
+def run_pipeline(config: DatasetConfig, args: argparse.Namespace | None = None) -> int:
+    if args is None:
+        args = parse_args(config)
 
     if args.start_url:
         url_pattern, start_date, end_date = parse_url_pattern_and_range(

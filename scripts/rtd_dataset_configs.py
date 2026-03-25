@@ -3,53 +3,36 @@ from __future__ import annotations
 
 from rtd_download_core import DatasetConfig, IntervalExpectation
 
-RTDHL_CONFIG = DatasetConfig(
-    dataset_code="RTDHL",
-    description="RTD HVDC limits imposed",
-    page_url="https://www.iemop.ph/market-data/hvdc-limits-imposed-in-rtd/",
-    md_file_prefix="/var/www/html/wp-content/uploads/downloads/data/RTDHL/RTDHL_",
-    output_root="data/rtd_hvdc_limits",
-    raw_filename_prefix="RTDHL",
-    qc_manifest_prefix="rtdhl_qc",
-    combined_filename_prefix="RTDHL",
+MP_CONFIG = DatasetConfig(
+    dataset_code="MP",
+    description="RTD market clearing price",
+    page_url="https://www.iemop.ph/market-data/rtd-market-clearing-price/",
+    md_file_prefix="/var/www/html/wp-content/uploads/downloads/data/MP/MP_",
+    output_root="data/mp",
+    raw_filename_prefix="MP",
+    qc_manifest_prefix="mp_qc",
+    combined_filename_prefix="MP",
     raw_header=(
         "RUN_TIME",
         "MKT_TYPE",
-        "HVDC_NAME",
-        "START_TIME",
-        "END_TIME",
-        "HVDC_LIMIT_TYPE",
-        "MAX_MW",
-        "MIN_MW",
-        "",
-    ),
-    timestamp_columns=("RUN_TIME", "START_TIME", "END_TIME"),
-    numeric_columns=("MAX_MW", "MIN_MW"),
-)
-
-RTDSL_CONFIG = DatasetConfig(
-    dataset_code="RTDSL",
-    description="RTD security limits used",
-    page_url="https://www.iemop.ph/market-data/security-limits-used-in-rtd/",
-    md_file_prefix="/var/www/html/wp-content/uploads/downloads/data/RTDSL/RTDSL_",
-    output_root="data/rtd_security_limits",
-    raw_filename_prefix="RTDSL",
-    qc_manifest_prefix="rtdsl_qc",
-    combined_filename_prefix="RTDSL",
-    raw_header=(
-        "RUN_TIME",
-        "MKT_TYPE",
+        "TIME_INTERVAL",
         "REGION_NAME",
         "RESOURCE_NAME",
         "RESOURCE_TYPE",
-        "START_TIME",
-        "END_TIME",
-        "PARAMETER_TYPE",
-        "PARAMETER_VALUE",
+        "COMMODITY_TYPE",
+        "MARGINAL_PRICE",
         "",
     ),
-    timestamp_columns=("RUN_TIME", "START_TIME", "END_TIME"),
-    numeric_columns=("PARAMETER_VALUE",),
+    timestamp_columns=("RUN_TIME", "TIME_INTERVAL"),
+    numeric_columns=("MARGINAL_PRICE",),
+    interval_expectation=IntervalExpectation(
+        interval_column="TIME_INTERVAL",
+        expected_count=288,
+        required_values_by_column={
+            "REGION_NAME": ("CLUZ", "CVIS", "CMIN"),
+            "COMMODITY_TYPE": ("En",),
+        },
+    ),
 )
 
 RTDCV_CONFIG = DatasetConfig(
@@ -57,7 +40,7 @@ RTDCV_CONFIG = DatasetConfig(
     description="RTD congestions manifesting",
     page_url="https://www.iemop.ph/market-data/congestions-manifesting-in-rtd/",
     md_file_prefix="/var/www/html/wp-content/uploads/downloads/data/RTDCV/RTDCV_",
-    output_root="data/rtd_congestion",
+    output_root="data/rtdcv",
     raw_filename_prefix="RTDCV",
     qc_manifest_prefix="rtdcv_qc",
     combined_filename_prefix="RTDCV",
@@ -85,7 +68,7 @@ RTDHS_CONFIG = DatasetConfig(
     description="RTD HVDC schedules",
     page_url="https://www.iemop.ph/market-data/rtd-hvdc-schedules/",
     md_file_prefix="/var/www/html/wp-content/uploads/downloads/data/RTDHS/RTDHS_",
-    output_root="data/rtd_hvdc_schedules",
+    output_root="data/rtdhs",
     raw_filename_prefix="RTDHS",
     qc_manifest_prefix="rtdhs_qc",
     combined_filename_prefix="RTDHS",
@@ -114,7 +97,7 @@ RTDREG_CONFIG = DatasetConfig(
     description="RTD regional summaries",
     page_url="https://www.iemop.ph/market-data/rtd-regional-summaries/",
     md_file_prefix="/var/www/html/wp-content/uploads/downloads/data/RTDREG/RTDREG_",
-    output_root="data/rtd_regional_summaries",
+    output_root="data/rtdreg",
     raw_filename_prefix="RTDREG",
     qc_manifest_prefix="rtdreg_qc",
     combined_filename_prefix="RTDREG",
@@ -152,3 +135,13 @@ RTDREG_CONFIG = DatasetConfig(
         },
     ),
 )
+
+DATASET_CONFIGS = {
+    config.dataset_code: config
+    for config in (
+        MP_CONFIG,
+        RTDCV_CONFIG,
+        RTDHS_CONFIG,
+        RTDREG_CONFIG,
+    )
+}

@@ -4,231 +4,70 @@ from __future__ import annotations
 import argparse
 import html
 from pathlib import Path
+import re
 
+import numpy as np
 import pandas as pd
 import statsmodels.formula.api as smf
 
-DEFAULT_DIRECT_PAIR_PANEL = Path("data/panels/RTD_DIRECT_PAIR_PANEL_202512212305_202603190000.parquet")
-DEFAULT_ISLAND_SYSTEM_PANEL = Path("data/panels/RTD_ISLAND_SYSTEM_PANEL_202512212305_202603210000.parquet")
-DEFAULT_ISLAND_CONGESTION_PANEL = Path("data/panels/RTD_ISLAND_CONGESTION_PANEL_202512212305_202603210000.parquet")
+CONTROL_COLUMNS = ("losses", "generation", "mkt_import", "mkt_export")
 DEFAULT_OUTPUT_ROOT = Path("regressions")
-
-FE_OPTIONS = {
-    "No FE": "",
-    "Month FE": " + C(fe_month)",
-    "Week FE": " + C(fe_week)",
-    "Day FE": " + C(fe_day)",
-}
-
-DIRECT_PAIR_DEP = "dep_abs_price_gap"
-ISLAND_SYSTEM_DEP = "dep_price_minus_sys"
-ISLAND_PRICE_DEP = "price_island_1"
 
 TERM_LABELS = {
     "Intercept": "Intercept",
-    "link_congested_any": "Inter-island link congestion indicator (1 = congested)",
-    "equip_cong_any_1": "Equipment congestion indicator, island 1 (1 = any congested resource)",
-    "equip_cong_any_2": "Equipment congestion indicator, island 2 (1 = any congested resource)",
-    "equip_excess_pct_sum_1": "Sum of equipment overload margins, island 1 (sum of PCT_MW - 100, pct points)",
-    "equip_excess_pct_sum_2": "Sum of equipment overload margins, island 2 (sum of PCT_MW - 100, pct points)",
-    "demand_1": "Island 1 demand (MWh requirement)",
-    "demand_2": "Island 2 demand (MWh requirement)",
-    "demand_total": "Total system demand across three islands (MWh requirement)",
-    "equip_cong_any": "Equipment congestion indicator (1 = any congested resource in island)",
-    "equip_excess_pct_sum": "Sum of equipment overload margins (sum of PCT_MW - 100, pct points)",
-    "demand_island": "Island demand (MWh requirement)",
-    "equipment_cong_bin_cluz": "Luzon equipment congestion indicator (1 = any congested resource)",
-    "equipment_cong_bin_cvis": "Visayas equipment congestion indicator (1 = any congested resource)",
-    "equipment_cong_bin_cmin": "Mindanao equipment congestion indicator (1 = any congested resource)",
-    "equipment_cong_pct_cluz": "Luzon overload margin sum (sum of PCT_MW - 100, pct points)",
-    "equipment_cong_pct_cvis": "Visayas overload margin sum (sum of PCT_MW - 100, pct points)",
-    "equipment_cong_pct_cmin": "Mindanao overload margin sum (sum of PCT_MW - 100, pct points)",
-    "demand_island_1": "Focal island demand (MWh requirement)",
-}
-
-SPECIFICATIONS = {
-    "direct_pair_binary": {
-        "title": "Specification 1: Direct Pair Panel, Binary Equipment Congestion",
-        "panel_path_key": "direct",
-        "dep_var": DIRECT_PAIR_DEP,
-        "dependent_label_html": "|P<sub>i,t</sub> - P<sub>j,t</sub>|",
-        "dependent_row_html": "|P<sub>i,t</sub> - P<sub>j,t</sub>| (PHP/MWh)",
-        "dependent_description": "Absolute price gap between the two directly connected islands at 5-minute interval t (PHP/MWh).",
-        "unit_of_observation": "Island-pair by 5-minute interval",
-        "rhs_terms": [
-            "link_congested_any",
-            "equip_cong_any_1",
-            "equip_cong_any_2",
-            "demand_1",
-            "demand_2",
-            "demand_total",
-        ],
-        "always_terms": ["C(pair_key)"],
-        "spec_description": "Uses binary congestion indicators for island-specific equipment congestion together with a binary inter-island link congestion indicator. Pair fixed effects are included in every column.",
-        "formula_html": (
-            "<em>|P<sub>i,t</sub> - P<sub>j,t</sub>|</em> = "
-            "&beta;<sub>1</sub> Link congestion"
-            " + &beta;<sub>2</sub> Equipment congestion (island 1)"
-            " + &beta;<sub>3</sub> Equipment congestion (island 2)"
-            " + &gamma;<sub>1</sub> Demand (island 1)"
-            " + &gamma;<sub>2</sub> Demand (island 2)"
-            " + &gamma;<sub>3</sub> Total demand"
-            " + pair fixed effects + calendar fixed effects + &epsilon;<sub>i,j,t</sub>"
-        ),
-    },
-    "direct_pair_pct": {
-        "title": "Specification 2: Direct Pair Panel, Percent Equipment Congestion",
-        "panel_path_key": "direct",
-        "dep_var": DIRECT_PAIR_DEP,
-        "dependent_label_html": "|P<sub>i,t</sub> - P<sub>j,t</sub>|",
-        "dependent_row_html": "|P<sub>i,t</sub> - P<sub>j,t</sub>| (PHP/MWh)",
-        "dependent_description": "Absolute price gap between the two directly connected islands at 5-minute interval t (PHP/MWh).",
-        "unit_of_observation": "Island-pair by 5-minute interval",
-        "rhs_terms": [
-            "link_congested_any",
-            "equip_excess_pct_sum_1",
-            "equip_excess_pct_sum_2",
-            "demand_1",
-            "demand_2",
-            "demand_total",
-        ],
-        "always_terms": ["C(pair_key)"],
-        "spec_description": "Replaces binary equipment congestion indicators with the summed overload margin on each side of the pair, measured in percentage points above 100% loading. Pair fixed effects are included in every column.",
-        "formula_html": (
-            "<em>|P<sub>i,t</sub> - P<sub>j,t</sub>|</em> = "
-            "&beta;<sub>1</sub> Link congestion"
-            " + &beta;<sub>2</sub> Overload margin sum (island 1)"
-            " + &beta;<sub>3</sub> Overload margin sum (island 2)"
-            " + &gamma;<sub>1</sub> Demand (island 1)"
-            " + &gamma;<sub>2</sub> Demand (island 2)"
-            " + &gamma;<sub>3</sub> Total demand"
-            " + pair fixed effects + calendar fixed effects + &epsilon;<sub>i,j,t</sub>"
-        ),
-    },
-    "island_system_binary": {
-        "title": "Specification 3: Island-System Panel, Binary Equipment Congestion",
-        "panel_path_key": "island",
-        "dep_var": ISLAND_SYSTEM_DEP,
-        "dependent_label_html": "|P<sub>i,t</sub> - P<sub>sys,t</sub>|",
-        "dependent_row_html": "|P<sub>i,t</sub> - P<sub>sys,t</sub>| (PHP/MWh)",
-        "dependent_description": "Absolute deviation between an island price and the demand-weighted system price at 5-minute interval t (PHP/MWh).",
-        "unit_of_observation": "Island by 5-minute interval",
-        "rhs_terms": [
-            "equip_cong_any",
-            "demand_island",
-            "demand_total",
-        ],
-        "always_terms": ["C(island_code)"],
-        "spec_description": "Uses a binary indicator for whether any mapped congested equipment appears in the island during the interval. Island fixed effects are included in every column.",
-        "formula_html": (
-            "<em>|P<sub>i,t</sub> - P<sub>sys,t</sub>|</em> = "
-            "&beta;<sub>1</sub> Equipment congestion"
-            " + &gamma;<sub>1</sub> Island demand"
-            " + &gamma;<sub>2</sub> Total demand"
-            " + island fixed effects + calendar fixed effects + &epsilon;<sub>i,t</sub>"
-        ),
-    },
-    "island_system_pct": {
-        "title": "Specification 4: Island-System Panel, Percent Equipment Congestion",
-        "panel_path_key": "island",
-        "dep_var": ISLAND_SYSTEM_DEP,
-        "dependent_label_html": "|P<sub>i,t</sub> - P<sub>sys,t</sub>|",
-        "dependent_row_html": "|P<sub>i,t</sub> - P<sub>sys,t</sub>| (PHP/MWh)",
-        "dependent_description": "Absolute deviation between an island price and the demand-weighted system price at 5-minute interval t (PHP/MWh).",
-        "unit_of_observation": "Island by 5-minute interval",
-        "rhs_terms": [
-            "equip_excess_pct_sum",
-            "demand_island",
-            "demand_total",
-        ],
-        "always_terms": ["C(island_code)"],
-        "spec_description": "Uses the summed equipment overload margin in the island, measured as the interval sum of PCT_MW - 100 across mapped congested resources. Island fixed effects are included in every column.",
-        "formula_html": (
-            "<em>|P<sub>i,t</sub> - P<sub>sys,t</sub>|</em> = "
-            "&beta;<sub>1</sub> Overload margin sum"
-            " + &gamma;<sub>1</sub> Island demand"
-            " + &gamma;<sub>2</sub> Total demand"
-            " + island fixed effects + calendar fixed effects + &epsilon;<sub>i,t</sub>"
-        ),
-    },
-    "island_price_pct": {
-        "title": "Specification 5: Focal-Island Price Panel, Percent Equipment Congestion",
-        "panel_path_key": "island_congestion",
-        "dep_var": ISLAND_PRICE_DEP,
-        "dependent_label_html": "P<sub>i,t</sub>",
-        "dependent_row_html": "P<sub>i,t</sub> (PHP/MWh)",
-        "dependent_description": "Price in the focal island at 5-minute interval t (PHP/MWh).",
-        "unit_of_observation": "Focal island by 5-minute interval",
-        "rhs_terms": [
-            "equipment_cong_pct_cluz",
-            "equipment_cong_pct_cvis",
-            "equipment_cong_pct_cmin",
-            "demand_island_1",
-        ],
-        "always_terms": ["C(island_1)"],
-        "spec_description": "Relates focal-island price to overload margin sums in Luzon, Visayas, and Mindanao, plus focal-island demand. Island fixed effects are included in every column.",
-        "formula_html": (
-            "<em>P<sub>i,t</sub></em> = "
-            "&beta;<sub>1</sub> Luzon overload margin sum"
-            " + &beta;<sub>2</sub> Visayas overload margin sum"
-            " + &beta;<sub>3</sub> Mindanao overload margin sum"
-            " + &gamma;<sub>1</sub> Focal-island demand"
-            " + island fixed effects + calendar fixed effects + &epsilon;<sub>i,t</sub>"
-        ),
-    },
-    "island_price_pct_by_island": {
-        "title": "Specification 6: Focal-Island Price Panel, Separate by Focal Island",
-        "panel_path_key": "island_congestion",
-        "dep_var": ISLAND_PRICE_DEP,
-        "dependent_label_html": "P<sub>i,t</sub>",
-        "dependent_row_html": "P<sub>i,t</sub> (PHP/MWh)",
-        "dependent_description": "Price in the focal island at 5-minute interval t (PHP/MWh).",
-        "unit_of_observation": "Focal island by 5-minute interval",
-        "rhs_terms": [
-            "equipment_cong_pct_cluz",
-            "equipment_cong_pct_cvis",
-            "equipment_cong_pct_cmin",
-            "demand_island_1",
-        ],
-        "calendar_fe_suffix": " + C(fe_day)",
-        "spec_description": "Runs the same percent-congestion specification separately for Luzon, Visayas, and Mindanao focal-island rows, using day fixed effects within each island-specific sample.",
-        "formula_html": (
-            "<em>P<sub>i,t</sub></em> = "
-            "&beta;<sub>1</sub> Luzon overload margin sum"
-            " + &beta;<sub>2</sub> Visayas overload margin sum"
-            " + &beta;<sub>3</sub> Mindanao overload margin sum"
-            " + &gamma;<sub>1</sub> Focal-island demand"
-            " + day fixed effects + &epsilon;<sub>i,t</sub>"
-        ),
-    },
+    "link_congested_any": "Inter-island link congestion indicator",
+    "equip_cong_any_1": "Equipment congestion indicator, island 1",
+    "equip_cong_any_2": "Equipment congestion indicator, island 2",
+    "equip_cong_any": "Equipment congestion indicator",
 }
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run baseline OLS regressions on the RTD pair and island-system panels."
+        description="Run cleaned day-FE binary log1p regressions on the retained RTD panels."
     )
-    parser.add_argument(
-        "--direct-pair-panel",
-        default=str(DEFAULT_DIRECT_PAIR_PANEL),
-        help="Direct-pair panel parquet path.",
-    )
-    parser.add_argument(
-        "--island-system-panel",
-        default=str(DEFAULT_ISLAND_SYSTEM_PANEL),
-        help="Island-system panel parquet path.",
-    )
-    parser.add_argument(
-        "--island-congestion-panel",
-        default=str(DEFAULT_ISLAND_CONGESTION_PANEL),
-        help="Focal-island congestion panel parquet path.",
-    )
+    parser.add_argument("--direct-pair-panel", help="Direct-pair panel parquet path.")
+    parser.add_argument("--island-system-panel", help="Island-system panel parquet path.")
     parser.add_argument(
         "--output-root",
         default=str(DEFAULT_OUTPUT_ROOT),
         help="Directory for regression tables and coefficient exports.",
     )
     return parser.parse_args()
+
+
+TIMESTAMP_TOKEN_RE = re.compile(r"(\d{8,12})")
+
+
+def latest_matching_file(root: Path, pattern: str) -> Path:
+    matches = list(root.glob(pattern))
+    if not matches:
+        raise FileNotFoundError(f"No files matched {pattern} under {root}.")
+
+    def sort_key(path: Path) -> tuple[str, str, str]:
+        tokens = TIMESTAMP_TOKEN_RE.findall(path.stem)
+        if not tokens:
+            return ("", "", path.name)
+        if len(tokens) == 1:
+            return (tokens[0], tokens[0], path.name)
+        return (tokens[-1], tokens[0], path.name)
+
+    return max(matches, key=sort_key)
+
+
+def load_panel(path: Path) -> pd.DataFrame:
+    frame = pd.read_parquet(path).copy()
+    frame["time_interval"] = pd.to_datetime(frame["time_interval"])
+    return frame
+
+
+def add_log1p_columns(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    result = frame.copy()
+    for column in columns:
+        if (result[column] < 0).any():
+            raise ValueError(f"Column {column} contains negative values; cannot apply log1p.")
+        result[f"log1p_{column}"] = np.log1p(result[column].astype(float))
+    return result
 
 
 def format_number(value: float, digits: int = 4) -> str:
@@ -247,135 +86,54 @@ def significance_stars(pvalue: float) -> str:
     return ""
 
 
-def load_panel(path: Path) -> pd.DataFrame:
-    frame = pd.read_parquet(path).copy()
-    frame["time_interval"] = pd.to_datetime(frame["time_interval"])
-    return frame
-
-
 def format_estimate_cell(result: object, term: str) -> str:
     coef = float(result.params[term])
     se = float(result.bse[term])
     pvalue = float(result.pvalues[term]) if term in result.pvalues.index else float("nan")
-    if coef == 0.0 and se == 0.0 and pd.isna(pvalue):
-        return "No overloads in sample"
     return f"{format_number(coef)}{significance_stars(pvalue)}<br>({format_number(se)})"
 
 
-def fit_models(
-    frame: pd.DataFrame,
-    dep_var: str,
-    rhs_terms: list[str],
-    always_terms: list[str] | None = None,
-) -> dict[str, object]:
-    rhs_parts = [*rhs_terms, *(always_terms or [])]
-    rhs = " + ".join(rhs_parts)
-    models: dict[str, object] = {}
-    for label, fe_suffix in FE_OPTIONS.items():
-        formula = f"{dep_var} ~ {rhs}{fe_suffix}"
-        models[label] = smf.ols(formula=formula, data=frame).fit(cov_type="HC1")
-    return models
-
-
-def fit_models_by_island(
-    frame: pd.DataFrame,
-    dep_var: str,
-    rhs_terms: list[str],
-    calendar_fe_suffix: str,
-) -> dict[str, object]:
-    models: dict[str, object] = {}
-    rhs = " + ".join(rhs_terms)
-    for island_code, island_label in [("CLUZ", "Luzon"), ("CVIS", "Visayas"), ("CMIN", "Mindanao")]:
-        subset = frame.loc[frame["island_1"] == island_code].copy()
-        formula = f"{dep_var} ~ {rhs}{calendar_fe_suffix}"
-        models[island_label] = smf.ols(formula=formula, data=subset).fit(cov_type="HC1")
-    return models
-
-
-def tidy_results(spec_name: str, dep_var: str, rhs_terms: list[str], models: dict[str, object]) -> pd.DataFrame:
+def tidy_results(spec_name: str, dep_var: str, rhs_terms: list[str], result: object) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
-    for fe_label, result in models.items():
-        for term in ["Intercept", *rhs_terms]:
-            rows.append(
-                {
-                    "specification": spec_name,
-                    "fe_option": fe_label,
-                    "dependent_variable": dep_var,
-                    "term": term,
-                    "coef": float(result.params[term]),
-                    "std_err": float(result.bse[term]),
-                    "pvalue": float(result.pvalues[term]),
-                    "nobs": int(result.nobs),
-                    "rsquared": float(result.rsquared),
-                }
-            )
-    return pd.DataFrame(rows)
-
-
-def build_display_table(rhs_terms: list[str], models: dict[str, object], dependent_row_html: str) -> pd.DataFrame:
-    rows: list[dict[str, str]] = []
-    for term in rhs_terms:
-        row = {"Variable": TERM_LABELS.get(term, term)}
-        for fe_label, result in models.items():
-            row[fe_label] = format_estimate_cell(result, term)
-        rows.append(row)
-
-    entity_fe_label = "No"
-    first_model = next(iter(models.values()))
-    exog_names = getattr(first_model.model, "exog_names", [])
-    if any(name.startswith("C(pair_key)") for name in exog_names):
-        entity_fe_label = "Pair FE"
-    elif any(name.startswith("C(island_code)") or name.startswith("C(island_1)") for name in exog_names):
-        entity_fe_label = "Island FE"
-
-    stats_rows = [
-        ("Observations", lambda result, fe_label: f"{int(result.nobs):,}"),
-        ("R-squared", lambda result, fe_label: format_number(float(result.rsquared), digits=3)),
-        ("Dependent variable", lambda result, fe_label: dependent_row_html),
-        ("Entity FE", lambda result, fe_label: entity_fe_label),
-        ("Calendar FE", lambda result, fe_label: fe_label),
-        ("Robust SE", lambda result, fe_label: "HC1"),
-    ]
-    for label, formatter in stats_rows:
-        row = {"Variable": label}
-        for fe_label, result in models.items():
-            row[fe_label] = formatter(result, fe_label)
-        rows.append(row)
-    return pd.DataFrame(rows)
-
-
-def build_by_island_display_table(
-    rhs_terms: list[str],
-    models: dict[str, object],
-    dependent_row_html: str,
-) -> pd.DataFrame:
-    rows: list[dict[str, str]] = []
-    for term in rhs_terms:
-        row = {"Variable": TERM_LABELS.get(term, term)}
-        for island_label, result in models.items():
-            row[island_label] = format_estimate_cell(result, term)
-        rows.append(row)
-
-    stats_rows = [
-        ("Observations", lambda result, island_label: f"{int(result.nobs):,}"),
-        ("R-squared", lambda result, island_label: format_number(float(result.rsquared), digits=3)),
-        ("Dependent variable", lambda result, island_label: dependent_row_html),
-        ("Entity FE", lambda result, island_label: "No"),
-        ("Calendar FE", lambda result, island_label: "Day FE"),
-        ("Sample", lambda result, island_label: island_label),
-        ("Robust SE", lambda result, island_label: "HC1"),
-    ]
-    for label, formatter in stats_rows:
-        row = {"Variable": label}
-        for island_label, result in models.items():
-            row[island_label] = formatter(result, island_label)
-        rows.append(row)
+    for term in ["Intercept", *rhs_terms]:
+        rows.append(
+            {
+                "specification": spec_name,
+                "dependent_variable": dep_var,
+                "term": term,
+                "coef": float(result.params[term]),
+                "std_err": float(result.bse[term]),
+                "pvalue": float(result.pvalues[term]),
+                "nobs": int(result.nobs),
+                "rsquared": float(result.rsquared),
+            }
+        )
     return pd.DataFrame(rows)
 
 
 def dataframe_to_html_table(frame: pd.DataFrame) -> str:
-    table = frame.copy()
-    return table.to_html(index=False, escape=False, classes=["reg-table"])
+    return frame.to_html(index=False, escape=False, classes=["reg-table"])
+
+
+def build_display_table(rhs_terms: list[str], result: object, dependent_row_html: str) -> pd.DataFrame:
+    rows: list[dict[str, str]] = []
+    for term in rhs_terms:
+        rows.append(
+            {
+                "Variable": prettify_log_term(term),
+                "Day FE": format_estimate_cell(result, term),
+            }
+        )
+
+    stats_rows = [
+        ("Observations", f"{int(result.nobs):,}"),
+        ("R-squared", format_number(float(result.rsquared), digits=3)),
+        ("Dependent variable", dependent_row_html),
+        ("Robust SE", "HC1"),
+    ]
+    for label, value in stats_rows:
+        rows.append({"Variable": label, "Day FE": value})
+    return pd.DataFrame(rows)
 
 
 def render_spec_section(spec: dict[str, str], panel_path: Path, table: pd.DataFrame) -> str:
@@ -402,20 +160,14 @@ def write_report(
     output_root: Path,
     direct_panel_path: Path,
     island_panel_path: Path,
-    island_congestion_panel_path: Path,
     spec_tables: dict[str, pd.DataFrame],
     tidy_results_by_spec: dict[str, pd.DataFrame],
 ) -> None:
     output_root.mkdir(parents=True, exist_ok=True)
-
     coeff_path = output_root / "panel_regression_coefficients.csv"
     pd.concat(list(tidy_results_by_spec.values()), ignore_index=True).to_csv(coeff_path, index=False)
 
     html_path = output_root / "panel_regression_tables.html"
-    markdown_path = output_root / "panel_regression_tables.md"
-    if markdown_path.exists():
-        markdown_path.unlink()
-
     css = """
 body { font-family: Georgia, "Times New Roman", serif; margin: 32px auto; max-width: 1280px; color: #102a43; line-height: 1.55; background: #f4f1ea; }
 h1, h2 { color: #0b1f33; }
@@ -436,25 +188,13 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
 .reg-table { border-collapse: collapse; width: 100%; margin: 18px 0 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(16, 42, 67, 0.10); }
 .reg-table th { background: #0b1f33; color: #fdfdfd; padding: 11px 12px; text-align: center; border: 1px solid #102a43; }
 .reg-table td { border: 1px solid #bcccdc; padding: 9px 12px; vertical-align: top; background: #fffdf8; color: #102a43; }
-.reg-table td:first-child { font-weight: 600; width: 340px; background: #e6ecf2; color: #0b1f33; }
+.reg-table td:first-child { font-weight: 600; width: 360px; background: #e6ecf2; color: #0b1f33; }
 .reg-table tr:nth-child(even) td:not(:first-child) { background: #eef3f7; }
 .notes { color: #243b53; font-size: 14px; background: #e6ecf2; border-radius: 12px; padding: 16px 18px; margin-top: 28px; }
 """
     spec_sections = [
-        render_spec_section(SPECIFICATIONS["direct_pair_binary"], direct_panel_path, spec_tables["direct_pair_binary"]),
-        render_spec_section(SPECIFICATIONS["direct_pair_pct"], direct_panel_path, spec_tables["direct_pair_pct"]),
-        render_spec_section(SPECIFICATIONS["island_system_binary"], island_panel_path, spec_tables["island_system_binary"]),
-        render_spec_section(SPECIFICATIONS["island_system_pct"], island_panel_path, spec_tables["island_system_pct"]),
-        render_spec_section(
-            SPECIFICATIONS["island_price_pct"],
-            island_congestion_panel_path,
-            spec_tables["island_price_pct"],
-        ),
-        render_spec_section(
-            SPECIFICATIONS["island_price_pct_by_island"],
-            island_congestion_panel_path,
-            spec_tables["island_price_pct_by_island"],
-        ),
+        render_spec_section(SPECIFICATIONS["direct_pair_binary_log"], direct_panel_path, spec_tables["direct_pair_binary_log"]),
+        render_spec_section(SPECIFICATIONS["island_system_binary_log"], island_panel_path, spec_tables["island_system_binary_log"]),
     ]
     html_body = f"""<!doctype html>
 <html lang="en">
@@ -465,12 +205,12 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
 </head>
 <body>
   <h1>Panel Regression Tables</h1>
-  <p class="lead">These regressions use <code>statsmodels</code> OLS with <code>HC1</code> robust standard errors and no 5-minute slot fixed effects. Specifications 1 through 5 report the same congestion design under four calendar fixed-effect options: none, month, week, and day. Specification 6 instead reports separate day-FE regressions for Luzon, Visayas, and Mindanao focal-island samples.</p>
+  <p class="lead">These regressions keep only the cleaned day-fixed-effect binary congestion specifications. Dependent variables and continuous controls use <code>log(1 + x)</code>, so continuous-control coefficients are elasticity-style estimates and congestion-indicator coefficients are semi-elasticities with day and entity fixed effects.</p>
 
   {''.join(spec_sections)}
 
   <div class="notes">
-    <p>FE variants shown are <code>No FE</code>, <code>Month FE</code>, <code>Week FE</code>, and <code>Day FE</code> for Specifications 1 through 5. Specification 6 is estimated separately by focal island with <code>Day FE</code> in each island-specific sample.</p>
+    <p>All specifications use <code>Day FE</code> plus entity fixed effects and <code>HC1</code> robust standard errors.</p>
     <p>Significance stars: <code>* p&lt;0.10</code>, <code>** p&lt;0.05</code>, <code>*** p&lt;0.01</code>.</p>
     <p>Full tidy coefficient export: <code>{html.escape(str(coeff_path))}</code></p>
   </div>
@@ -480,40 +220,112 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
     html_path.write_text(html_body, encoding="utf-8")
 
 
+def prettify_log_term(term: str) -> str:
+    if not term.startswith("log1p_"):
+        return TERM_LABELS.get(term, term)
+    base = term.removeprefix("log1p_")
+    if base.endswith("_total"):
+        return f"log(1 + {base.removesuffix('_total').upper()} total)"
+    if base.endswith("_island"):
+        return f"log(1 + {base.removesuffix('_island').upper()} island)"
+    if base.endswith("_1"):
+        return f"log(1 + {base.removesuffix('_1').upper()} island 1)"
+    if base.endswith("_2"):
+        return f"log(1 + {base.removesuffix('_2').upper()} island 2)"
+    return f"log(1 + {base.upper()})"
+
+
+SPECIFICATIONS = {
+    "direct_pair_binary_log": {
+        "title": "Specification 1: Direct Pair Panel, Day FE Binary Congestion",
+        "panel_path_key": "direct",
+        "dep_var": "log1p_dep_abs_price_gap",
+        "dependent_label_html": "log(1 + |P<sub>i,t</sub> - P<sub>j,t</sub>|)",
+        "dependent_row_html": "log(1 + |P<sub>i,t</sub> - P<sub>j,t</sub>|)",
+        "dependent_description": "Log1p absolute price gap between the two directly connected islands at 5-minute interval t.",
+        "unit_of_observation": "Island-pair by 5-minute interval",
+        "rhs_terms": [
+            "link_congested_any",
+            "equip_cong_any_1",
+            "equip_cong_any_2",
+            *[f"log1p_{control}_{side}" for control in CONTROL_COLUMNS for side in ("1", "2", "total")],
+        ],
+        "always_terms": ["C(pair_key)", "C(fe_day)"],
+        "spec_description": "Uses binary congestion indicators for the inter-island link and each side of the pair, plus log1p RTDREG controls for LOSSES, GENERATION, MKT_IMPORT, and MKT_EXPORT at island-1, island-2, and system-total levels.",
+        "formula_html": (
+            "<em>log(1 + |P<sub>i,t</sub> - P<sub>j,t</sub>|)</em> = "
+            "&beta;<sub>1</sub> Link congestion + &beta;<sub>2</sub> Equipment congestion (island 1)"
+            " + &beta;<sub>3</sub> Equipment congestion (island 2)"
+            " + log(1 + controls)"
+            " + pair fixed effects + day fixed effects + &epsilon;<sub>i,j,t</sub>"
+        ),
+    },
+    "island_system_binary_log": {
+        "title": "Specification 2: Island-System Panel, Day FE Binary Congestion",
+        "panel_path_key": "island",
+        "dep_var": "log1p_dep_price_minus_sys",
+        "dependent_label_html": "log(1 + |P<sub>i,t</sub> - P<sub>sys,t</sub>|)",
+        "dependent_row_html": "log(1 + |P<sub>i,t</sub> - P<sub>sys,t</sub>|)",
+        "dependent_description": "Log1p absolute deviation between an island price and the demand-weighted system price at 5-minute interval t.",
+        "unit_of_observation": "Island by 5-minute interval",
+        "rhs_terms": [
+            "equip_cong_any",
+            *[f"log1p_{control}_{side}" for control in CONTROL_COLUMNS for side in ("island", "total")],
+        ],
+        "always_terms": ["C(island_code)", "C(fe_day)"],
+        "spec_description": "Uses the binary island equipment-congestion indicator plus log1p RTDREG controls for LOSSES, GENERATION, MKT_IMPORT, and MKT_EXPORT at island and system-total levels.",
+        "formula_html": (
+            "<em>log(1 + |P<sub>i,t</sub> - P<sub>sys,t</sub>|)</em> = "
+            "&beta;<sub>1</sub> Equipment congestion + log(1 + controls)"
+            " + island fixed effects + day fixed effects + &epsilon;<sub>i,t</sub>"
+        ),
+    },
+}
+
+
+def fit_model(frame: pd.DataFrame, dep_var: str, rhs_terms: list[str], always_terms: list[str]) -> object:
+    rhs = " + ".join([*rhs_terms, *always_terms])
+    formula = f"{dep_var} ~ {rhs}"
+    return smf.ols(formula=formula, data=frame).fit(cov_type="HC1")
+
+
 def main() -> None:
     args = parse_args()
-    direct_panel_path = Path(args.direct_pair_panel)
-    island_panel_path = Path(args.island_system_panel)
-    island_congestion_panel_path = Path(args.island_congestion_panel)
+    direct_panel_path = Path(args.direct_pair_panel) if args.direct_pair_panel else latest_matching_file(
+        Path("data/panels"),
+        "RTD_DIRECT_PAIR_PANEL_*.parquet",
+    )
+    island_panel_path = Path(args.island_system_panel) if args.island_system_panel else latest_matching_file(
+        Path("data/panels"),
+        "RTD_ISLAND_SYSTEM_PANEL_*.parquet",
+    )
     output_root = Path(args.output_root)
 
     direct_frame = load_panel(direct_panel_path)
     island_frame = load_panel(island_panel_path)
-    island_congestion_frame = load_panel(island_congestion_panel_path)
+    direct_frame = add_log1p_columns(
+        direct_frame,
+        ["dep_abs_price_gap", *[f"{control}_{side}" for control in CONTROL_COLUMNS for side in ("1", "2", "total")]],
+    )
+    island_frame = add_log1p_columns(
+        island_frame,
+        ["dep_price_minus_sys", *[f"{control}_{side}" for control in CONTROL_COLUMNS for side in ("island", "total")]],
+    )
 
-    frames = {"direct": direct_frame, "island": island_frame, "island_congestion": island_congestion_frame}
+    frames = {"direct": direct_frame, "island": island_frame}
     spec_tables: dict[str, pd.DataFrame] = {}
     tidy_results_by_spec: dict[str, pd.DataFrame] = {}
+
     for spec_key, spec in SPECIFICATIONS.items():
         frame = frames[spec["panel_path_key"]]
-        if spec_key == "island_price_pct_by_island":
-            models = fit_models_by_island(frame, spec["dep_var"], spec["rhs_terms"], spec["calendar_fe_suffix"])
-            tidy_results_by_spec[spec_key] = tidy_results(spec_key, spec["dep_var"], spec["rhs_terms"], models)
-            spec_tables[spec_key] = build_by_island_display_table(
-                spec["rhs_terms"],
-                models,
-                spec["dependent_row_html"],
-            )
-        else:
-            models = fit_models(frame, spec["dep_var"], spec["rhs_terms"], spec.get("always_terms"))
-            tidy_results_by_spec[spec_key] = tidy_results(spec_key, spec["dep_var"], spec["rhs_terms"], models)
-            spec_tables[spec_key] = build_display_table(spec["rhs_terms"], models, spec["dependent_row_html"])
+        result = fit_model(frame, spec["dep_var"], spec["rhs_terms"], spec["always_terms"])
+        tidy_results_by_spec[spec_key] = tidy_results(spec_key, spec["dep_var"], spec["rhs_terms"], result)
+        spec_tables[spec_key] = build_display_table(spec["rhs_terms"], result, spec["dependent_row_html"])
 
     write_report(
         output_root,
         direct_panel_path,
         island_panel_path,
-        island_congestion_panel_path,
         spec_tables,
         tidy_results_by_spec,
     )
