@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Panel Dependent Variable Visuals</title>
+  <style>
+body { font-family: Georgia, "Times New Roman", serif; margin: 32px auto; max-width: 1280px; color: #102a43; line-height: 1.55; background: #f4f1ea; }
+h1, h2, h3 { color: #0b1f33; }
+h1 { margin-bottom: 10px; }
+p { margin: 0 0 14px; }
+code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px; }
+.lead { font-size: 17px; color: #243b53; margin-bottom: 22px; }
+.panel-card { background: #faf7f1; border: 1px solid #d9e2ec; border-radius: 14px; padding: 22px 24px; margin: 24px 0 30px; box-shadow: 0 10px 28px rgba(16, 42, 67, 0.08); }
+.meta { color: #486581; font-size: 14px; margin-bottom: 12px; }
+.formula { background: #102a43; color: #fdfdfd; border-radius: 12px; padding: 12px 14px; font-size: 18px; margin: 0 0 18px; }
+.figure-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 18px 0; }
+.figure-card { background: #eef3f7; border-radius: 12px; padding: 12px; }
+.figure-card img { width: 100%; border-radius: 8px; display: block; }
+.figure-card .caption { font-size: 14px; color: #243b53; margin-top: 8px; }
+.summary-table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 14px; }
+.summary-table th { background: #0b1f33; color: #fdfdfd; padding: 10px 12px; text-align: center; border: 1px solid #102a43; }
+.summary-table td { border: 1px solid #bcccdc; padding: 8px 12px; background: #fffdf8; text-align: right; }
+.summary-table td:first-child { text-align: left; font-weight: 600; background: #e6ecf2; }
+.notes { color: #243b53; font-size: 14px; background: #e6ecf2; border-radius: 12px; padding: 16px 18px; margin-top: 26px; }
+</style>
+</head>
+<body>
+  <h1>Panel Dependent Variable Visuals</h1>
+  <p class="lead">This page summarizes the regression dependent variables from the three panel constructions: direct-pair price gaps, island-vs-system price gaps, and focal-island price levels. Each panel includes a daily profile chart and a distribution chart, plus summary statistics for quick comparison.</p>
+
+  <section class="panel-card">
+    <h2>Direct-Pair Panel</h2>
+    <div class="meta">Source: <code>data/panels/RTD_DIRECT_PAIR_PANEL_202512212305_202603190000.parquet</code></div>
+    <div class="formula">Dependent variable: <em>|P<sub>i,t</sub> - P<sub>j,t</sub>|</em> (PHP/MWh)</div>
+    <div class="figure-grid">
+      <div class="figure-card">
+        <img src="panel_depvar_visual_assets/direct_pair_daily_gap.png" alt="Daily direct-pair price gap profile">
+        <div class="caption">Daily median direct-pair price gap with 10th to 90th percentile band.</div>
+      </div>
+      <div class="figure-card">
+        <img src="panel_depvar_visual_assets/direct_pair_gap_boxplot.png" alt="Direct-pair price gap distribution">
+        <div class="caption">Distribution of direct-pair price gaps by island pair. Outlier points are hidden to keep the central mass readable.</div>
+      </div>
+    </div>
+    <table border="1" class="dataframe summary-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Group</th>
+      <th>observations</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>maximum</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Luzon-Visayas</td>
+      <td>25,046</td>
+      <td>3,082.9</td>
+      <td>65.9</td>
+      <td>9,156.6</td>
+      <td>27,301.5</td>
+      <td>217,632.1</td>
+    </tr>
+    <tr>
+      <td>Visayas-Mindanao</td>
+      <td>25,046</td>
+      <td>1,047.9</td>
+      <td>124.6</td>
+      <td>1,444.7</td>
+      <td>19,793.0</td>
+      <td>216,614.3</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="panel-card">
+    <h2>Island-System Panel</h2>
+    <div class="meta">Source: <code>data/panels/RTD_ISLAND_SYSTEM_PANEL_202512212305_202603210000.parquet</code></div>
+    <div class="formula">Dependent variable: <em>|P<sub>i,t</sub> - P<sub>sys,t</sub>|</em> (PHP/MWh)</div>
+    <div class="figure-grid">
+      <div class="figure-card">
+        <img src="panel_depvar_visual_assets/island_system_daily_gap.png" alt="Daily island-system price gap profile">
+        <div class="caption">Daily median island-versus-system price gap with 10th to 90th percentile band.</div>
+      </div>
+      <div class="figure-card">
+        <img src="panel_depvar_visual_assets/island_system_gap_boxplot.png" alt="Island-system price gap distribution">
+        <div class="caption">Distribution of island-versus-system price gaps by island. Outlier points are hidden to keep the central mass readable.</div>
+      </div>
+    </div>
+    <table border="1" class="dataframe summary-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Group</th>
+      <th>observations</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>maximum</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Luzon</td>
+      <td>25,622</td>
+      <td>913.2</td>
+      <td>63.7</td>
+      <td>2,765.7</td>
+      <td>7,908.3</td>
+      <td>58,780.5</td>
+    </tr>
+    <tr>
+      <td>Mindanao</td>
+      <td>25,622</td>
+      <td>2,219.1</td>
+      <td>243.2</td>
+      <td>6,689.8</td>
+      <td>18,453.4</td>
+      <td>149,927.1</td>
+    </tr>
+    <tr>
+      <td>Visayas</td>
+      <td>25,622</td>
+      <td>2,245.4</td>
+      <td>101.7</td>
+      <td>6,406.0</td>
+      <td>21,610.0</td>
+      <td>185,006.4</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="panel-card">
+    <h2>Focal-Island Price Panel</h2>
+    <div class="meta">Source: <code>data/panels/RTD_ISLAND_CONGESTION_PANEL_202512212305_202603210000.parquet</code></div>
+    <div class="formula">Dependent variable: <em>P<sub>i,t</sub></em> (PHP/MWh)</div>
+    <div class="figure-grid">
+      <div class="figure-card">
+        <img src="panel_depvar_visual_assets/focal_island_daily_price.png" alt="Daily focal-island price profile">
+        <div class="caption">Daily median focal-island price with 10th to 90th percentile band.</div>
+      </div>
+      <div class="figure-card">
+        <img src="panel_depvar_visual_assets/focal_island_price_boxplot.png" alt="Focal-island price distribution">
+        <div class="caption">Distribution of focal-island price levels by island. Outlier points are hidden to keep the central mass readable.</div>
+      </div>
+    </div>
+    <table border="1" class="dataframe summary-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Group</th>
+      <th>observations</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>maximum</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Luzon</td>
+      <td>25,622</td>
+      <td>2,744.6</td>
+      <td>2,778.3</td>
+      <td>5,377.1</td>
+      <td>15,485.3</td>
+      <td>129,813.6</td>
+    </tr>
+    <tr>
+      <td>Mindanao</td>
+      <td>25,622</td>
+      <td>4,620.0</td>
+      <td>3,039.5</td>
+      <td>11,262.7</td>
+      <td>27,526.4</td>
+      <td>132,547.9</td>
+    </tr>
+    <tr>
+      <td>Visayas</td>
+      <td>25,622</td>
+      <td>4,689.6</td>
+      <td>3,030.5</td>
+      <td>12,396.8</td>
+      <td>30,152.1</td>
+      <td>124,752.8</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <div class="notes">
+    <p>All visuals are based on the current regression panel outputs on disk.</p>
+    <p>The direct-pair and island-system dependent variables are absolute price-gap measures. The focal-island panel uses the raw island price level as the dependent variable for the focal-island regressions.</p>
+  </div>
+</body>
+</html>

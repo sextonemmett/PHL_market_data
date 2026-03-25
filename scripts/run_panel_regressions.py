@@ -63,7 +63,8 @@ SPECIFICATIONS = {
             "demand_2",
             "demand_total",
         ],
-        "spec_description": "Uses binary congestion indicators for island-specific equipment congestion together with a binary inter-island link congestion indicator.",
+        "always_terms": ["C(pair_key)"],
+        "spec_description": "Uses binary congestion indicators for island-specific equipment congestion together with a binary inter-island link congestion indicator. Pair fixed effects are included in every column.",
         "formula_html": (
             "<em>|P<sub>i,t</sub> - P<sub>j,t</sub>|</em> = "
             "&beta;<sub>1</sub> Link congestion"
@@ -72,7 +73,7 @@ SPECIFICATIONS = {
             " + &gamma;<sub>1</sub> Demand (island 1)"
             " + &gamma;<sub>2</sub> Demand (island 2)"
             " + &gamma;<sub>3</sub> Total demand"
-            " + calendar fixed effects + &epsilon;<sub>i,j,t</sub>"
+            " + pair fixed effects + calendar fixed effects + &epsilon;<sub>i,j,t</sub>"
         ),
     },
     "direct_pair_pct": {
@@ -91,7 +92,8 @@ SPECIFICATIONS = {
             "demand_2",
             "demand_total",
         ],
-        "spec_description": "Replaces binary equipment congestion indicators with the summed overload margin on each side of the pair, measured in percentage points above 100% loading.",
+        "always_terms": ["C(pair_key)"],
+        "spec_description": "Replaces binary equipment congestion indicators with the summed overload margin on each side of the pair, measured in percentage points above 100% loading. Pair fixed effects are included in every column.",
         "formula_html": (
             "<em>|P<sub>i,t</sub> - P<sub>j,t</sub>|</em> = "
             "&beta;<sub>1</sub> Link congestion"
@@ -100,7 +102,7 @@ SPECIFICATIONS = {
             " + &gamma;<sub>1</sub> Demand (island 1)"
             " + &gamma;<sub>2</sub> Demand (island 2)"
             " + &gamma;<sub>3</sub> Total demand"
-            " + calendar fixed effects + &epsilon;<sub>i,j,t</sub>"
+            " + pair fixed effects + calendar fixed effects + &epsilon;<sub>i,j,t</sub>"
         ),
     },
     "island_system_binary": {
@@ -116,13 +118,14 @@ SPECIFICATIONS = {
             "demand_island",
             "demand_total",
         ],
-        "spec_description": "Uses a binary indicator for whether any mapped congested equipment appears in the island during the interval.",
+        "always_terms": ["C(island_code)"],
+        "spec_description": "Uses a binary indicator for whether any mapped congested equipment appears in the island during the interval. Island fixed effects are included in every column.",
         "formula_html": (
             "<em>|P<sub>i,t</sub> - P<sub>sys,t</sub>|</em> = "
             "&beta;<sub>1</sub> Equipment congestion"
             " + &gamma;<sub>1</sub> Island demand"
             " + &gamma;<sub>2</sub> Total demand"
-            " + calendar fixed effects + &epsilon;<sub>i,t</sub>"
+            " + island fixed effects + calendar fixed effects + &epsilon;<sub>i,t</sub>"
         ),
     },
     "island_system_pct": {
@@ -138,13 +141,14 @@ SPECIFICATIONS = {
             "demand_island",
             "demand_total",
         ],
-        "spec_description": "Uses the summed equipment overload margin in the island, measured as the interval sum of PCT_MW - 100 across mapped congested resources.",
+        "always_terms": ["C(island_code)"],
+        "spec_description": "Uses the summed equipment overload margin in the island, measured as the interval sum of PCT_MW - 100 across mapped congested resources. Island fixed effects are included in every column.",
         "formula_html": (
             "<em>|P<sub>i,t</sub> - P<sub>sys,t</sub>|</em> = "
             "&beta;<sub>1</sub> Overload margin sum"
             " + &gamma;<sub>1</sub> Island demand"
             " + &gamma;<sub>2</sub> Total demand"
-            " + calendar fixed effects + &epsilon;<sub>i,t</sub>"
+            " + island fixed effects + calendar fixed effects + &epsilon;<sub>i,t</sub>"
         ),
     },
     "island_price_pct": {
@@ -316,10 +320,19 @@ def build_display_table(rhs_terms: list[str], models: dict[str, object], depende
             row[fe_label] = format_estimate_cell(result, term)
         rows.append(row)
 
+    entity_fe_label = "No"
+    first_model = next(iter(models.values()))
+    exog_names = getattr(first_model.model, "exog_names", [])
+    if any(name.startswith("C(pair_key)") for name in exog_names):
+        entity_fe_label = "Pair FE"
+    elif any(name.startswith("C(island_code)") or name.startswith("C(island_1)") for name in exog_names):
+        entity_fe_label = "Island FE"
+
     stats_rows = [
         ("Observations", lambda result, fe_label: f"{int(result.nobs):,}"),
         ("R-squared", lambda result, fe_label: format_number(float(result.rsquared), digits=3)),
         ("Dependent variable", lambda result, fe_label: dependent_row_html),
+        ("Entity FE", lambda result, fe_label: entity_fe_label),
         ("Calendar FE", lambda result, fe_label: fe_label),
         ("Robust SE", lambda result, fe_label: "HC1"),
     ]
@@ -347,6 +360,7 @@ def build_by_island_display_table(
         ("Observations", lambda result, island_label: f"{int(result.nobs):,}"),
         ("R-squared", lambda result, island_label: format_number(float(result.rsquared), digits=3)),
         ("Dependent variable", lambda result, island_label: dependent_row_html),
+        ("Entity FE", lambda result, island_label: "No"),
         ("Calendar FE", lambda result, island_label: "Day FE"),
         ("Sample", lambda result, island_label: island_label),
         ("Robust SE", lambda result, island_label: "HC1"),
