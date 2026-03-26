@@ -85,6 +85,13 @@ def output_path(output_root: Path, stem: str, frame: pd.DataFrame) -> Path:
     return output_root / f"{stem}_{start}_{end}.parquet"
 
 
+def finalize_region_wide(wide: pd.DataFrame) -> pd.DataFrame:
+    for region in REGION_LABELS:
+        if region not in wide.columns:
+            wide[region] = 0
+    return wide[list(REGION_LABELS)].astype(int)
+
+
 def load_price_wide(path: Path) -> pd.DataFrame:
     price = pd.read_parquet(path).copy()
     price["TIME_INTERVAL"] = pd.to_datetime(price["TIME_INTERVAL"])
@@ -127,11 +134,12 @@ def load_regional_inputs(path: Path) -> tuple[pd.DataFrame, dict[str, pd.DataFra
     return demand_wide, control_wides
 
 
-def load_congestion_wide(congestion_path: Path, mapping_path: Path | None) -> pd.DataFrame:
+def load_congestion_wides(congestion_path: Path, mapping_path: Path | None) -> tuple[pd.DataFrame, pd.DataFrame]:
     congestion = pd.read_parquet(congestion_path).copy()
     congestion["TIME_INTERVAL"] = pd.to_datetime(congestion["TIME_INTERVAL"])
     if congestion.empty:
-        return pd.DataFrame(columns=list(REGION_LABELS)).rename_axis(index="time_interval", columns=None)
+        empty = pd.DataFrame(columns=list(REGION_LABELS)).rename_axis(index="time_interval", columns=None)
+        return empty.copy(), empty.copy()
 
     if mapping_path is None:
         raise FileNotFoundError(
@@ -155,27 +163,38 @@ def load_congestion_wide(congestion_path: Path, mapping_path: Path | None) -> pd
         missing = sorted(congestion.loc[congestion["region_code"].isna(), "EQUIPMENT_NAME"].unique())
         raise ValueError(f"Unmapped congestion equipment names: {missing[:10]}")
 
+    congestion["equip_cong_any"] = 1
+    congestion["equip_overload_any"] = congestion["OVERLOAD_MW"].fillna(0).gt(0).astype(int)
     grouped = (
-        congestion.groupby(["TIME_INTERVAL", "region_code"], observed=True)["EQUIPMENT_NAME"]
-        .size()
-        .rename("equip_cong_any")
+        congestion.groupby(["TIME_INTERVAL", "region_code"], observed=True)[["equip_cong_any", "equip_overload_any"]]
+        .max()
         .reset_index()
     )
-    grouped["equip_cong_any"] = 1
-    wide = (
+
+    congestion_wide = (
         grouped.pivot(index="TIME_INTERVAL", columns="region_code", values="equip_cong_any")
         .rename_axis(index="time_interval", columns=None)
         .sort_index()
         .fillna(0)
-        .astype(int)
     )
-    for region in REGION_LABELS:
-        if region not in wide.columns:
-            wide[region] = 0
-    return wide[list(REGION_LABELS)]
+    overload_wide = (
+        grouped.pivot(index="TIME_INTERVAL", columns="region_code", values="equip_overload_any")
+        .rename_axis(index="time_interval", columns=None)
+        .sort_index()
+        .fillna(0)
+    )
+    return finalize_region_wide(congestion_wide), finalize_region_wide(overload_wide)
 
 
-def load_hvdc_wide(path: Path) -> pd.DataFrame:
+def island_incident_links() -> dict[str, list[str]]:
+    links_by_island = {region: [] for region in REGION_LABELS}
+    for pair in DIRECT_PAIRS:
+        links_by_island[pair["island_1"]].append(pair["link_name"])
+        links_by_island[pair["island_2"]].append(pair["link_name"])
+    return links_by_island
+
+
+def load_hvdc_wide(path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     hvdc = pd.read_parquet(path).copy()
     hvdc["TIME_INTERVAL"] = pd.to_datetime(hvdc["TIME_INTERVAL"])
     hvdc = hvdc.loc[hvdc["HVDC_NAME"].isin({pair["link_name"] for pair in DIRECT_PAIRS})].copy()
@@ -194,7 +213,11 @@ def load_hvdc_wide(path: Path) -> pd.DataFrame:
     for pair in DIRECT_PAIRS:
         if pair["link_name"] not in wide.columns:
             wide[pair["link_name"]] = pd.NA
-    return wide[[pair["link_name"] for pair in DIRECT_PAIRS]]
+    island_link_wide = pd.DataFrame(index=wide.index)
+    for region, links in island_incident_links().items():
+        island_link_wide[region] = wide[links].max(axis=1)
+    island_link_wide = island_link_wide.rename_axis(index="time_interval", columns=None).sort_index()
+    return wide[[pair["link_name"] for pair in DIRECT_PAIRS]], island_link_wide
 
 
 def add_fixed_effects(df: pd.DataFrame) -> pd.DataFrame:
@@ -208,6 +231,8 @@ def build_island_system_panel(
     demand_wide: pd.DataFrame,
     control_wides: dict[str, pd.DataFrame],
     congestion_any_wide: pd.DataFrame,
+    overload_any_wide: pd.DataFrame,
+    island_interlink_wide: pd.DataFrame,
 ) -> pd.DataFrame:
     base = price_wide.add_suffix("_price").join(demand_wide.add_suffix("_demand"), how="inner").dropna().copy()
     for control_name, control_wide in control_wides.items():
@@ -219,15 +244,17 @@ def build_island_system_panel(
         base[f"demand_{region}"] = base[f"{region}_demand"]
 
     base["demand_total"] = sum(base[f"demand_{region}"] for region in REGION_LABELS)
+    # The system price is the demand-weighted average island price at each interval.
     base["price_sys_dw"] = sum(
         base[f"price_{region}"] * base[f"demand_{region}"] for region in REGION_LABELS
     ) / base["demand_total"]
-
     control_totals = {
         control_name: control_wides[control_name].reindex(base.index).sum(axis=1)
         for control_name in CONTROL_COLUMNS
     }
     congestion_any_aligned = congestion_any_wide.reindex(base.index, fill_value=0)
+    overload_any_aligned = overload_any_wide.reindex(base.index, fill_value=0)
+    island_interlink_aligned = island_interlink_wide.reindex(base.index)
 
     rows: list[pd.DataFrame] = []
     for region in REGION_LABELS:
@@ -238,7 +265,9 @@ def build_island_system_panel(
                 "price_island": base[f"price_{region}"].to_numpy(),
                 "price_sys_dw": base["price_sys_dw"].to_numpy(),
                 "dep_price_minus_sys": (base[f"price_{region}"] - base["price_sys_dw"]).abs().to_numpy(),
+                "interlink_congested_any": island_interlink_aligned[region].to_numpy(),
                 "equip_cong_any": congestion_any_aligned[region].to_numpy(),
+                "equip_overload_any": overload_any_aligned[region].to_numpy(),
             }
         )
         for control_name in CONTROL_COLUMNS:
@@ -246,6 +275,8 @@ def build_island_system_panel(
             control_aligned = control_wides[control_name].reindex(base.index)
             panel[f"{control_key}_island"] = control_aligned[region].to_numpy()
             panel[f"{control_key}_total"] = control_totals[control_name].to_numpy()
+        panel = panel.dropna(subset=["interlink_congested_any"]).copy()
+        panel["interlink_congested_any"] = panel["interlink_congested_any"].astype(int)
         rows.append(panel)
 
     result = pd.concat(rows, ignore_index=True)
@@ -258,6 +289,7 @@ def build_direct_pair_panel(
     price_wide: pd.DataFrame,
     control_wides: dict[str, pd.DataFrame],
     congestion_any_wide: pd.DataFrame,
+    overload_any_wide: pd.DataFrame,
     hvdc_wide: pd.DataFrame,
 ) -> pd.DataFrame:
     base = price_wide.add_suffix("_price").copy()
@@ -273,6 +305,7 @@ def build_direct_pair_panel(
         for control_name in CONTROL_COLUMNS
     }
     congestion_any_aligned = congestion_any_wide.reindex(base.index, fill_value=0)
+    overload_any_aligned = overload_any_wide.reindex(base.index, fill_value=0)
     hvdc_aligned = hvdc_wide.reindex(base.index)
 
     rows: list[pd.DataFrame] = []
@@ -297,7 +330,9 @@ def build_direct_pair_panel(
                     base.loc[pair_index, f"price_{island_1}"] - base.loc[pair_index, f"price_{island_2}"]
                 ).abs().to_numpy(),
                 "equip_cong_any_1": congestion_any_aligned.loc[pair_index, island_1].to_numpy(),
+                "equip_overload_any_1": overload_any_aligned.loc[pair_index, island_1].to_numpy(),
                 "equip_cong_any_2": congestion_any_aligned.loc[pair_index, island_2].to_numpy(),
+                "equip_overload_any_2": overload_any_aligned.loc[pair_index, island_2].to_numpy(),
                 "link_name": link,
                 "link_congested_any": hvdc_aligned.loc[pair_index, link].astype(int).to_numpy(),
             }
@@ -351,19 +386,22 @@ def main() -> None:
 
     price_wide = load_price_wide(price_path)
     demand_wide, control_wides = load_regional_inputs(regional_path)
-    congestion_any_wide = load_congestion_wide(congestion_path, congestion_map_path)
-    hvdc_wide = load_hvdc_wide(hvdc_path)
+    congestion_any_wide, overload_any_wide = load_congestion_wides(congestion_path, congestion_map_path)
+    hvdc_wide, island_interlink_wide = load_hvdc_wide(hvdc_path)
 
     island_system_panel = build_island_system_panel(
         price_wide,
         demand_wide,
         control_wides,
         congestion_any_wide,
+        overload_any_wide,
+        island_interlink_wide,
     )
     direct_pair_panel = build_direct_pair_panel(
         price_wide,
         control_wides,
         congestion_any_wide,
+        overload_any_wide,
         hvdc_wide,
     )
 

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <title>Panel Regression Tables</title>
   <style>
-body { font-family: Georgia, "Times New Roman", serif; margin: 32px auto; max-width: 1280px; color: #102a43; line-height: 1.55; background: #f4f1ea; }
+body { font-family: Georgia, "Times New Roman", serif; margin: 32px auto; max-width: 1440px; color: #102a43; line-height: 1.55; background: #f4f1ea; }
 h1, h2 { color: #0b1f33; }
 h1 { margin-bottom: 10px; }
 h2 { margin: 0 0 14px; }
@@ -15,7 +15,6 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
 .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin: 0 0 16px; }
 .meta-grid div { background: #eef3f7; border-radius: 10px; padding: 10px 12px; }
 .meta-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #486581; margin-bottom: 4px; }
-.formula-inline { color: #0b1f33; font-size: 18px; }
 .spec-description { color: #243b53; margin-bottom: 14px; }
 .formula-box { background: #102a43; color: #fdfdfd; border-radius: 12px; padding: 14px 16px; margin: 0 0 18px; }
 .formula-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; margin-bottom: 8px; }
@@ -23,111 +22,163 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
 .reg-table { border-collapse: collapse; width: 100%; margin: 18px 0 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(16, 42, 67, 0.10); }
 .reg-table th { background: #0b1f33; color: #fdfdfd; padding: 11px 12px; text-align: center; border: 1px solid #102a43; }
 .reg-table td { border: 1px solid #bcccdc; padding: 9px 12px; vertical-align: top; background: #fffdf8; color: #102a43; }
-.reg-table td:first-child { font-weight: 600; width: 360px; background: #e6ecf2; color: #0b1f33; }
+.reg-table td:first-child { font-weight: 600; width: 320px; background: #e6ecf2; color: #0b1f33; }
 .reg-table tr:nth-child(even) td:not(:first-child) { background: #eef3f7; }
 .notes { color: #243b53; font-size: 14px; background: #e6ecf2; border-radius: 12px; padding: 16px 18px; margin-top: 28px; }
 </style>
 </head>
 <body>
-  <h1>Panel Regression Tables</h1>
-  <p class="lead">These regressions keep only the cleaned day-fixed-effect binary congestion specifications. Dependent variables and continuous controls use <code>log(1 + x)</code>, so continuous-control coefficients are elasticity-style estimates and congestion-indicator coefficients are semi-elasticities with day and entity fixed effects.</p>
+  <h1>RTD PPML Regression Tables</h1>
+  <p class="lead">All reported estimates come from Poisson pseudo-maximum-likelihood models. Binary rows are exact percent effects for a dummy moving from 0 to 1. RTDREG continuous rows are reported as exact percent effects for a <code>+100 MW</code> change, which is usually easier to interpret here than a per-1-MW coefficient.</p>
 
   
   <section class="spec-card">
-    <h2>Specification 1: Direct Pair Panel, Day FE Binary Congestion</h2>
+    <h2>Specification 1: Direct Pair Price Gap</h2>
     <div class="meta-grid">
       <div><span class="meta-label">Source panel</span><code>data/panels/RTD_DIRECT_PAIR_PANEL_202512240005_202603242300.parquet</code></div>
+      <div><span class="meta-label">Sample</span><span>Pooled and pair-specific direct-link samples</span></div>
       <div><span class="meta-label">Unit of observation</span><span>Island-pair by 5-minute interval</span></div>
-      <div><span class="meta-label">Dependent variable</span><span class="formula-inline"><em>log(1 + |P<sub>i,t</sub> - P<sub>j,t</sub>|)</em></span></div>
-      <div><span class="meta-label">Interpretation</span><span>Log1p absolute price gap between the two directly connected islands at 5-minute interval t.</span></div>
+      <div><span class="meta-label">Column meaning</span><span>All columns are PPML exact percent effects. Dummy rows are 0-to-1 effects. Continuous RTDREG rows are exact percent effects for a <em>+100 MW</em> change.</span></div>
     </div>
-    <p class="spec-description">Uses binary congestion indicators for the inter-island link and each side of the pair, plus log1p RTDREG controls for LOSSES, GENERATION, MKT_IMPORT, and MKT_EXPORT at island-1, island-2, and system-total levels.</p>
+    <p class="spec-description">Explains the direct-pair absolute RTD price gap using the pair-specific inter-island link congestion flag, equipment congestion and overload indicators on each side of the pair, and island-level RTDREG controls. System-total RTDREG controls are excluded.</p>
     <div class="formula-box">
-      <div class="formula-label">Regression specification</div>
-      <div class="formula"><em>log(1 + |P<sub>i,t</sub> - P<sub>j,t</sub>|)</em> = &beta;<sub>1</sub> Link congestion + &beta;<sub>2</sub> Equipment congestion (island 1) + &beta;<sub>3</sub> Equipment congestion (island 2) + log(1 + controls) + pair fixed effects + day fixed effects + &epsilon;<sub>i,j,t</sub></div>
+      <div class="formula-label">Regression Formula</div>
+      <div class="formula"><em>E[g<sub>ij,t</sub> | X]</em> = exp(&beta;<sub>1</sub> LinkCong<sub>ij,t</sub> + &beta;<sub>2</sub> EquipCong<sub>i,t</sub> + &beta;<sub>3</sub> Overload<sub>i,t</sub> + &beta;<sub>4</sub> EquipCong<sub>j,t</sub> + &beta;<sub>5</sub> Overload<sub>j,t</sub> + &Gamma;X<sub>ij,t</sub> + &alpha;<sub>ij</sub> + &delta;<sub>d</sub>), where <em>g<sub>ij,t</sub></em> = |P<sub>i,t</sub> - P<sub>j,t</sub>|.</div>
     </div>
     <table border="1" class="dataframe reg-table">
   <thead>
     <tr style="text-align: right;">
       <th>Variable</th>
-      <th>Day FE</th>
+      <th>Pooled (Both Pairs)</th>
+      <th>Luzon-Visayas</th>
+      <th>Visayas-Mindanao</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>Inter-island link congestion indicator</td>
-      <td>6.3542***<br>(0.0204)</td>
+      <td>Pair-Specific Link Congestion</td>
+      <td>4,391.18%***<br>(171.44%)</td>
+      <td>1,033,315.94%***<br>(699,255.48%)</td>
+      <td>1,922.93%***<br>(133.20%)</td>
     </tr>
     <tr>
-      <td>Equipment congestion indicator, island 1</td>
-      <td>-0.1003***<br>(0.0319)</td>
+      <td>Equipment Congestion: Island 1</td>
+      <td>23.33%**<br>(12.96%)</td>
+      <td>-2.70%<br>(5.77%)</td>
+      <td>153.92%***<br>(49.20%)</td>
     </tr>
     <tr>
-      <td>Equipment congestion indicator, island 2</td>
-      <td>-0.2285***<br>(0.0357)</td>
+      <td>Overload > 0: Island 1</td>
+      <td>21.36%<br>(15.01%)</td>
+      <td>0.19%<br>(33.95%)</td>
+      <td>-36.78%***<br>(10.79%)</td>
     </tr>
     <tr>
-      <td>log(1 + LOSSES island 1)</td>
-      <td>0.5263***<br>(0.0480)</td>
+      <td>Equipment Congestion: Island 2</td>
+      <td>78.50%***<br>(17.79%)</td>
+      <td>131.80%***<br>(22.60%)</td>
+      <td>-63.21%**<br>(14.42%)</td>
     </tr>
     <tr>
-      <td>log(1 + LOSSES island 2)</td>
-      <td>0.2611***<br>(0.0459)</td>
+      <td>Overload > 0: Island 2</td>
+      <td>-50.02%***<br>(4.65%)</td>
+      <td>-53.36%***<br>(3.78%)</td>
+      <td></td>
     </tr>
     <tr>
-      <td>log(1 + LOSSES total)</td>
-      <td>-1.3709***<br>(0.1475)</td>
+      <td>Losses: Island 1 (+100 MW)</td>
+      <td>46.94%***<br>(13.75%)</td>
+      <td>-16.68%<br>(9.30%)</td>
+      <td>-100.00%***<br>(0.00%)</td>
     </tr>
     <tr>
-      <td>log(1 + GENERATION island 1)</td>
-      <td>-1.0723***<br>(0.1498)</td>
+      <td>Losses: Island 2 (+100 MW)</td>
+      <td>-73.00%***<br>(7.38%)</td>
+      <td>-100.00%***<br>(0.00%)</td>
+      <td>4,197.23%***<br>(2,068.19%)</td>
     </tr>
     <tr>
-      <td>log(1 + GENERATION island 2)</td>
-      <td>0.5979***<br>(0.1478)</td>
+      <td>Generation: Island 1 (+100 MW)</td>
+      <td>-0.72%<br>(0.49%)</td>
+      <td>-10.45%***<br>(0.74%)</td>
+      <td>70.37%***<br>(7.23%)</td>
     </tr>
     <tr>
-      <td>log(1 + GENERATION total)</td>
-      <td>6.5460***<br>(0.3784)</td>
+      <td>Generation: Island 2 (+100 MW)</td>
+      <td>21.23%***<br>(2.29%)</td>
+      <td>99.51%***<br>(5.89%)</td>
+      <td>-42.00%***<br>(2.45%)</td>
     </tr>
     <tr>
-      <td>log(1 + MKT_IMPORT island 1)</td>
-      <td>0.1454***<br>(0.0095)</td>
+      <td>Market Imports: Island 1 (+100 MW)</td>
+      <td>2.17%<br>(3.06%)</td>
+      <td>-32.05%***<br>(6.54%)</td>
+      <td>307.25%***<br>(36.93%)</td>
     </tr>
     <tr>
-      <td>log(1 + MKT_IMPORT island 2)</td>
-      <td>0.0849***<br>(0.0085)</td>
+      <td>Market Imports: Island 2 (+100 MW)</td>
+      <td>61.88%***<br>(2.82%)</td>
+      <td>142.01%***<br>(6.42%)</td>
+      <td>213.55%***<br>(55.19%)</td>
     </tr>
     <tr>
-      <td>log(1 + MKT_IMPORT total)</td>
-      <td>92.1895<br>(307.2115)</td>
+      <td>Market Exports: Island 1 (+100 MW)</td>
+      <td>-25.64%***<br>(1.86%)</td>
+      <td>16.73%***<br>(6.18%)</td>
+      <td>-69.63%***<br>(2.31%)</td>
     </tr>
     <tr>
-      <td>log(1 + MKT_EXPORT island 1)</td>
-      <td>0.0778***<br>(0.0062)</td>
+      <td>Market Exports: Island 2 (+100 MW)</td>
+      <td>-10.58%***<br>(2.77%)</td>
+      <td>-23.46%***<br>(2.99%)</td>
+      <td>-24.07%***<br>(7.75%)</td>
     </tr>
     <tr>
-      <td>log(1 + MKT_EXPORT island 2)</td>
-      <td>-0.0023<br>(0.0081)</td>
+      <td>Estimator</td>
+      <td>PPML</td>
+      <td>PPML</td>
+      <td>PPML</td>
     </tr>
     <tr>
-      <td>log(1 + MKT_EXPORT total)</td>
-      <td>-92.1008<br>(307.2119)</td>
+      <td>Subsample</td>
+      <td>Both direct pairs pooled</td>
+      <td>Luzon-Visayas</td>
+      <td>Visayas-Mindanao</td>
     </tr>
     <tr>
       <td>Observations</td>
       <td>52,348</td>
+      <td>26,174</td>
+      <td>26,174</td>
     </tr>
     <tr>
-      <td>R-squared</td>
-      <td>0.815</td>
+      <td>Fit metric</td>
+      <td>Pseudo R² 0.751</td>
+      <td>Pseudo R² 0.787</td>
+      <td>Pseudo R² 0.776</td>
     </tr>
     <tr>
       <td>Dependent variable</td>
-      <td>log(1 + |P<sub>i,t</sub> - P<sub>j,t</sub>|)</td>
+      <td>|P_i,t - P_j,t|</td>
+      <td>|P_i,t - P_j,t|</td>
+      <td>|P_i,t - P_j,t|</td>
+    </tr>
+    <tr>
+      <td>Unit FE</td>
+      <td>Pair</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>Calendar FE</td>
+      <td>Day</td>
+      <td>Day</td>
+      <td>Day</td>
     </tr>
     <tr>
       <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
       <td>HC1</td>
     </tr>
   </tbody>
@@ -135,76 +186,132 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
   </section>
 
   <section class="spec-card">
-    <h2>Specification 2: Island-System Panel, Day FE Binary Congestion</h2>
+    <h2>Specification 2: Island Against System</h2>
     <div class="meta-grid">
       <div><span class="meta-label">Source panel</span><code>data/panels/RTD_ISLAND_SYSTEM_PANEL_202512240005_202603242300.parquet</code></div>
+      <div><span class="meta-label">Sample</span><span>Pooled and island-specific samples</span></div>
       <div><span class="meta-label">Unit of observation</span><span>Island by 5-minute interval</span></div>
-      <div><span class="meta-label">Dependent variable</span><span class="formula-inline"><em>log(1 + |P<sub>i,t</sub> - P<sub>sys,t</sub>|)</em></span></div>
-      <div><span class="meta-label">Interpretation</span><span>Log1p absolute deviation between an island price and the demand-weighted system price at 5-minute interval t.</span></div>
+      <div><span class="meta-label">Column meaning</span><span>All columns are PPML exact percent effects. Dummy rows are 0-to-1 effects. Continuous RTDREG rows are exact percent effects for a <em>+100 MW</em> change.</span></div>
     </div>
-    <p class="spec-description">Uses the binary island equipment-congestion indicator plus log1p RTDREG controls for LOSSES, GENERATION, MKT_IMPORT, and MKT_EXPORT at island and system-total levels.</p>
+    <p class="spec-description">Explains the absolute deviation between the focal island RTD price and the demand-weighted system RTD price using an island-specific any-connected-inter-link congestion flag, focal-island equipment congestion and overload indicators, and focal-island RTDREG controls. System-total RTDREG controls are excluded.</p>
     <div class="formula-box">
-      <div class="formula-label">Regression specification</div>
-      <div class="formula"><em>log(1 + |P<sub>i,t</sub> - P<sub>sys,t</sub>|)</em> = &beta;<sub>1</sub> Equipment congestion + log(1 + controls) + island fixed effects + day fixed effects + &epsilon;<sub>i,t</sub></div>
+      <div class="formula-label">Regression Formula</div>
+      <div class="formula"><em>E[g<sub>i,t</sub> | X]</em> = exp(&beta;<sub>1</sub> AnyConnectedInterLinkCong<sub>i,t</sub> + &beta;<sub>2</sub> EquipCong<sub>i,t</sub> + &beta;<sub>3</sub> Overload<sub>i,t</sub> + &Gamma;X<sub>i,t</sub> + &alpha;<sub>i</sub> + &delta;<sub>d</sub>), where <em>g<sub>i,t</sub></em> = |P<sub>i,t</sub> - P<sub>sys,t</sub>| and <em>P<sub>sys,t</sub></em> is the demand-weighted system price.</div>
     </div>
     <table border="1" class="dataframe reg-table">
   <thead>
     <tr style="text-align: right;">
       <th>Variable</th>
-      <th>Day FE</th>
+      <th>Pooled (All Islands)</th>
+      <th>Luzon vs System</th>
+      <th>Visayas vs System</th>
+      <th>Mindanao vs System</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>Equipment congestion indicator</td>
-      <td>0.5536***<br>(0.0409)</td>
+      <td>Any Connected Inter-Link Congestion</td>
+      <td>437.85%***<br>(9.96%)</td>
+      <td>1,767.97%***<br>(77.76%)</td>
+      <td>11,961.42%***<br>(376.33%)</td>
+      <td>71.13%***<br>(6.62%)</td>
     </tr>
     <tr>
-      <td>log(1 + LOSSES island)</td>
-      <td>-0.1216**<br>(0.0510)</td>
+      <td>Equipment Congestion: Focal Island</td>
+      <td>-0.40%<br>(8.66%)</td>
+      <td>-12.58%**<br>(5.57%)</td>
+      <td>120.74%***<br>(25.71%)</td>
+      <td>-17.33%<br>(13.46%)</td>
     </tr>
     <tr>
-      <td>log(1 + LOSSES total)</td>
-      <td>0.2053<br>(0.1517)</td>
+      <td>Overload > 0: Focal Island</td>
+      <td>-35.25%***<br>(6.08%)</td>
+      <td>-7.07%<br>(42.14%)</td>
+      <td>-54.68%***<br>(4.57%)</td>
+      <td></td>
     </tr>
     <tr>
-      <td>log(1 + GENERATION island)</td>
-      <td>-0.2865**<br>(0.1190)</td>
+      <td>Losses: Focal Island (+100 MW)</td>
+      <td>84.89%***<br>(10.34%)</td>
+      <td>264.29%***<br>(34.21%)</td>
+      <td>-99.43%***<br>(0.24%)</td>
+      <td>-46.52%***<br>(11.40%)</td>
     </tr>
     <tr>
-      <td>log(1 + GENERATION total)</td>
-      <td>10.6480***<br>(0.2520)</td>
+      <td>Generation: Focal Island (+100 MW)</td>
+      <td>7.65%***<br>(0.22%)</td>
+      <td>3.79%***<br>(0.22%)</td>
+      <td>30.43%***<br>(1.09%)</td>
+      <td>35.46%***<br>(1.89%)</td>
     </tr>
     <tr>
-      <td>log(1 + MKT_IMPORT island)</td>
-      <td>-0.0269***<br>(0.0079)</td>
+      <td>Market Imports: Focal Island (+100 MW)</td>
+      <td>54.36%***<br>(1.46%)</td>
+      <td>25.26%***<br>(4.23%)</td>
+      <td>69.06%***<br>(2.04%)</td>
+      <td>31.43%***<br>(6.28%)</td>
     </tr>
     <tr>
-      <td>log(1 + MKT_IMPORT total)</td>
-      <td>218.8718<br>(340.5962)</td>
+      <td>Market Exports: Focal Island (+100 MW)</td>
+      <td>9.81%***<br>(0.88%)</td>
+      <td>-31.23%***<br>(2.05%)</td>
+      <td>-27.44%***<br>(2.27%)</td>
+      <td>-5.07%***<br>(1.83%)</td>
     </tr>
     <tr>
-      <td>log(1 + MKT_EXPORT island)</td>
-      <td>-0.0353***<br>(0.0066)</td>
+      <td>Estimator</td>
+      <td>PPML</td>
+      <td>PPML</td>
+      <td>PPML</td>
+      <td>PPML</td>
     </tr>
     <tr>
-      <td>log(1 + MKT_EXPORT total)</td>
-      <td>-218.3434<br>(340.5968)</td>
+      <td>Subsample</td>
+      <td>All islands pooled</td>
+      <td>Luzon</td>
+      <td>Visayas</td>
+      <td>Mindanao</td>
     </tr>
     <tr>
       <td>Observations</td>
       <td>78,522</td>
+      <td>26,174</td>
+      <td>26,174</td>
+      <td>26,174</td>
     </tr>
     <tr>
-      <td>R-squared</td>
-      <td>0.396</td>
+      <td>Fit metric</td>
+      <td>Pseudo R² 0.517</td>
+      <td>Pseudo R² 0.633</td>
+      <td>Pseudo R² 0.718</td>
+      <td>Pseudo R² 0.459</td>
     </tr>
     <tr>
       <td>Dependent variable</td>
-      <td>log(1 + |P<sub>i,t</sub> - P<sub>sys,t</sub>|)</td>
+      <td>|P_i,t - P_sys,t|</td>
+      <td>|P_i,t - P_sys,t|</td>
+      <td>|P_i,t - P_sys,t|</td>
+      <td>|P_i,t - P_sys,t|</td>
+    </tr>
+    <tr>
+      <td>Unit FE</td>
+      <td>Island</td>
+      <td>No</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>Calendar FE</td>
+      <td>Day</td>
+      <td>Day</td>
+      <td>Day</td>
+      <td>Day</td>
     </tr>
     <tr>
       <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
       <td>HC1</td>
     </tr>
   </tbody>
@@ -213,7 +320,11 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
 
 
   <div class="notes">
-    <p>All specifications use <code>Day FE</code> plus entity fixed effects and <code>HC1</code> robust standard errors.</p>
+    <p>All specifications use day fixed effects and <code>HC1</code> robust standard errors.</p>
+    <p>The pooled direct-pair column includes pair fixed effects; the pair-specific columns do not because each sample contains one pair.</p>
+    <p>The pooled island-vs-system column includes island fixed effects; the island-specific columns do not because each sample contains one island.</p>
+    <p>The system price is the demand-weighted average of island prices using <code>MKT_REQT</code> weights at each 5-minute interval.</p>
+    <p>System-total RTDREG controls are excluded from all reported regressions.</p>
     <p>Significance stars: <code>* p&lt;0.10</code>, <code>** p&lt;0.05</code>, <code>*** p&lt;0.01</code>.</p>
     <p>Full tidy coefficient export: <code>regressions/panel_regression_coefficients.csv</code></p>
   </div>

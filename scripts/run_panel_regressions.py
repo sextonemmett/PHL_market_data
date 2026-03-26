@@ -8,23 +8,29 @@ import re
 
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
 CONTROL_COLUMNS = ("losses", "generation", "mkt_import", "mkt_export")
 DEFAULT_OUTPUT_ROOT = Path("regressions")
-
-TERM_LABELS = {
-    "Intercept": "Intercept",
-    "link_congested_any": "Inter-island link congestion indicator",
-    "equip_cong_any_1": "Equipment congestion indicator, island 1",
-    "equip_cong_any_2": "Equipment congestion indicator, island 2",
-    "equip_cong_any": "Equipment congestion indicator",
+TIMESTAMP_TOKEN_RE = re.compile(r"(\d{8,12})")
+ISLAND_LABELS = {"CLUZ": "Luzon", "CVIS": "Visayas", "CMIN": "Mindanao"}
+ISLAND_COLUMN_TITLES = {
+    "CLUZ": "Luzon vs System",
+    "CVIS": "Visayas vs System",
+    "CMIN": "Mindanao vs System",
 }
+PAIR_LABELS = {"CLUZ_CVIS": "Luzon-Visayas", "CVIS_CMIN": "Visayas-Mindanao"}
+PAIR_COLUMN_TITLES = {"CLUZ_CVIS": "Luzon-Visayas", "CVIS_CMIN": "Visayas-Mindanao"}
+PPML_CONTINUOUS_DELTA = 100.0
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run cleaned day-FE binary log1p regressions on the retained RTD panels."
+        description=(
+            "Run retained RTD PPML regressions for the direct-pair and island-vs-system "
+            "panels and write the formatted HTML tables plus a tidy coefficient export."
+        )
     )
     parser.add_argument("--direct-pair-panel", help="Direct-pair panel parquet path.")
     parser.add_argument("--island-system-panel", help="Island-system panel parquet path.")
@@ -34,9 +40,6 @@ def parse_args() -> argparse.Namespace:
         help="Directory for regression tables and coefficient exports.",
     )
     return parser.parse_args()
-
-
-TIMESTAMP_TOKEN_RE = re.compile(r"(\d{8,12})")
 
 
 def latest_matching_file(root: Path, pattern: str) -> Path:
@@ -61,15 +64,6 @@ def load_panel(path: Path) -> pd.DataFrame:
     return frame
 
 
-def add_log1p_columns(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
-    result = frame.copy()
-    for column in columns:
-        if (result[column] < 0).any():
-            raise ValueError(f"Column {column} contains negative values; cannot apply log1p.")
-        result[f"log1p_{column}"] = np.log1p(result[column].astype(float))
-    return result
-
-
 def format_number(value: float, digits: int = 4) -> str:
     return f"{value:,.{digits}f}"
 
@@ -86,26 +80,129 @@ def significance_stars(pvalue: float) -> str:
     return ""
 
 
-def format_estimate_cell(result: object, term: str) -> str:
+def is_binary_term(term: str) -> bool:
+    return term in {
+        "link_congested_any",
+        "interlink_congested_any",
+        "equip_cong_any_1",
+        "equip_cong_any_2",
+        "equip_cong_any",
+        "equip_overload_any_1",
+        "equip_overload_any_2",
+        "equip_overload_any",
+    }
+
+
+def is_continuous_mw_term(term: str) -> bool:
+    return term.startswith(("losses_", "generation_", "mkt_import_", "mkt_export_"))
+
+
+def reporting_delta(term: str) -> float | None:
+    if is_binary_term(term):
+        return 1.0
+    if is_continuous_mw_term(term):
+        return PPML_CONTINUOUS_DELTA
+    return None
+
+
+def reporting_unit_label(term: str) -> str:
+    if is_binary_term(term):
+        return "0 to 1"
+    if is_continuous_mw_term(term):
+        return "+100 MW"
+    return ""
+
+
+def transformed_effect(result: object, term: str, delta: float) -> tuple[float, float]:
     coef = float(result.params[term])
     se = float(result.bse[term])
+    transformed_coef = 100.0 * (np.exp(coef * delta) - 1.0)
+    transformed_se = 100.0 * np.exp(coef * delta) * delta * se
+    return transformed_coef, transformed_se
+
+
+def format_percent_effect_cell(result: object, term: str) -> str:
+    delta = reporting_delta(term)
+    if delta is None:
+        coef = float(result.params[term])
+        se = float(result.bse[term])
+        pvalue = float(result.pvalues[term]) if term in result.pvalues.index else float("nan")
+        return f"{format_number(coef)}{significance_stars(pvalue)}<br>({format_number(se)})"
+
     pvalue = float(result.pvalues[term]) if term in result.pvalues.index else float("nan")
-    return f"{format_number(coef)}{significance_stars(pvalue)}<br>({format_number(se)})"
+    transformed_coef, transformed_se = transformed_effect(result, term, delta)
+    return (
+        f"{format_number(transformed_coef, digits=2)}%{significance_stars(pvalue)}"
+        f"<br>({format_number(transformed_se, digits=2)}%)"
+    )
 
 
-def tidy_results(spec_name: str, dep_var: str, rhs_terms: list[str], result: object) -> pd.DataFrame:
+def fit_ppml(frame: pd.DataFrame, dep_var: str, rhs_terms: list[str], fixed_effect_terms: list[str]) -> object:
+    rhs = " + ".join([*rhs_terms, *fixed_effect_terms])
+    formula = f"{dep_var} ~ {rhs}"
+    return smf.glm(
+        formula=formula,
+        data=frame,
+        family=sm.families.Poisson(),
+    ).fit(cov_type="HC1", maxiter=200)
+
+
+def select_estimable_terms(frame: pd.DataFrame, rhs_terms: list[str]) -> list[str]:
+    kept_terms: list[str] = []
+    for term in rhs_terms:
+        if term not in frame.columns:
+            continue
+        if frame[term].nunique(dropna=False) <= 1:
+            continue
+        if any(frame[term].equals(frame[kept_term]) for kept_term in kept_terms):
+            continue
+        kept_terms.append(term)
+    return kept_terms
+
+
+def fit_metric_cell(column: dict[str, object]) -> str:
+    result = column["result"]
+    llnull = getattr(result, "llnull", None)
+    llf = getattr(result, "llf", None)
+    if llnull is not None and llf is not None and llnull != 0:
+        pseudo_r2 = 1.0 - (llf / llnull)
+        return f"Pseudo R² {format_number(float(pseudo_r2), digits=3)}"
+    return "Pseudo R² n/a"
+
+
+def tidy_results(
+    section_key: str,
+    column_key: str,
+    dependent_variable: str,
+    rhs_terms: list[str],
+    result: object,
+) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     for term in ["Intercept", *rhs_terms]:
+        delta = reporting_delta(term)
+        reported_effect_pct = np.nan
+        reported_effect_se_pct = np.nan
+        if delta is not None and term in result.params.index:
+            reported_effect_pct, reported_effect_se_pct = transformed_effect(result, term, delta)
+
         rows.append(
             {
-                "specification": spec_name,
-                "dependent_variable": dep_var,
+                "section": section_key,
+                "column_key": column_key,
+                "dependent_variable": dependent_variable,
                 "term": term,
                 "coef": float(result.params[term]),
                 "std_err": float(result.bse[term]),
                 "pvalue": float(result.pvalues[term]),
                 "nobs": int(result.nobs),
-                "rsquared": float(result.rsquared),
+                "pseudo_r2": (
+                    float(1.0 - (result.llf / result.llnull))
+                    if getattr(result, "llnull", None) not in {None, 0}
+                    else np.nan
+                ),
+                "reported_change": reporting_unit_label(term),
+                "reported_effect_pct": reported_effect_pct,
+                "reported_effect_se_pct": reported_effect_se_pct,
             }
         )
     return pd.DataFrame(rows)
@@ -115,41 +212,98 @@ def dataframe_to_html_table(frame: pd.DataFrame) -> str:
     return frame.to_html(index=False, escape=False, classes=["reg-table"])
 
 
-def build_display_table(rhs_terms: list[str], result: object, dependent_row_html: str) -> pd.DataFrame:
+def prettify_variable_label(label: str) -> str:
+    labels = {
+        "link_congested_any": "Pair-Specific Link Congestion",
+        "interlink_congested_any": "Any Connected Inter-Link Congestion",
+        "equip_cong_any_1": "Equipment Congestion: Island 1",
+        "equip_cong_any_2": "Equipment Congestion: Island 2",
+        "equip_cong_any": "Equipment Congestion: Focal Island",
+        "equip_overload_any_1": "Overload > 0: Island 1",
+        "equip_overload_any_2": "Overload > 0: Island 2",
+        "equip_overload_any": "Overload > 0: Focal Island",
+        "losses_1": "Losses: Island 1",
+        "losses_2": "Losses: Island 2",
+        "generation_1": "Generation: Island 1",
+        "generation_2": "Generation: Island 2",
+        "mkt_import_1": "Market Imports: Island 1",
+        "mkt_import_2": "Market Imports: Island 2",
+        "mkt_export_1": "Market Exports: Island 1",
+        "mkt_export_2": "Market Exports: Island 2",
+        "losses_island": "Losses: Focal Island",
+        "generation_island": "Generation: Focal Island",
+        "mkt_import_island": "Market Imports: Focal Island",
+        "mkt_export_island": "Market Exports: Focal Island",
+    }
+    pretty = labels.get(label, label)
+    if is_continuous_mw_term(label):
+        return f"{pretty} (+100 MW)"
+    return pretty
+
+
+def format_display_cell(column: dict[str, object], concept: dict[str, str]) -> str:
+    term = concept["term"]
+    result = column["result"]
+    if term not in result.params.index:
+        return ""
+    return format_percent_effect_cell(result, term)
+
+
+def build_multi_column_table(
+    concepts: list[dict[str, str]],
+    columns: list[dict[str, object]],
+    extra_stats: list[tuple[str, object]] | None = None,
+) -> pd.DataFrame:
     rows: list[dict[str, str]] = []
-    for term in rhs_terms:
-        rows.append(
-            {
-                "Variable": prettify_log_term(term),
-                "Day FE": format_estimate_cell(result, term),
-            }
-        )
+    headers = ["Variable", *[str(column["title"]) for column in columns]]
+
+    for concept in concepts:
+        row = {"Variable": prettify_variable_label(concept["label"])}
+        for column in columns:
+            row[str(column["title"])] = format_display_cell(column, concept)
+        rows.append(row)
 
     stats_rows = [
-        ("Observations", f"{int(result.nobs):,}"),
-        ("R-squared", format_number(float(result.rsquared), digits=3)),
-        ("Dependent variable", dependent_row_html),
-        ("Robust SE", "HC1"),
+        ("Estimator", lambda column: "PPML"),
+        ("Subsample", lambda column: str(column["sample_label"])),
+        ("Observations", lambda column: f"{int(column['result'].nobs):,}"),
+        ("Fit metric", fit_metric_cell),
+        ("Dependent variable", lambda column: str(column["dependent_label"])),
+        *([] if extra_stats is None else extra_stats),
+        ("Robust SE", lambda column: "HC1"),
     ]
-    for label, value in stats_rows:
-        rows.append({"Variable": label, "Day FE": value})
-    return pd.DataFrame(rows)
+    for label, value_fn in stats_rows:
+        row = {"Variable": label}
+        for column in columns:
+            row[str(column["title"])] = value_fn(column)
+        rows.append(row)
+
+    return pd.DataFrame(rows, columns=headers)
 
 
-def render_spec_section(spec: dict[str, str], panel_path: Path, table: pd.DataFrame) -> str:
+def render_section(
+    title: str,
+    panel_path: Path,
+    sample_label: str,
+    unit_of_observation: str,
+    description: str,
+    transform_note_html: str,
+    formula_html: str,
+    table: pd.DataFrame,
+) -> str:
     return f"""
   <section class="spec-card">
-    <h2>{html.escape(spec["title"])}</h2>
+    <h2>{html.escape(title)}</h2>
     <div class="meta-grid">
       <div><span class="meta-label">Source panel</span><code>{html.escape(str(panel_path))}</code></div>
-      <div><span class="meta-label">Unit of observation</span><span>{html.escape(spec["unit_of_observation"])}</span></div>
-      <div><span class="meta-label">Dependent variable</span><span class="formula-inline"><em>{spec["dependent_label_html"]}</em></span></div>
-      <div><span class="meta-label">Interpretation</span><span>{html.escape(spec["dependent_description"])}</span></div>
+      <div><span class="meta-label">Sample</span><span>{html.escape(sample_label)}</span></div>
+      <div><span class="meta-label">Unit of observation</span><span>{html.escape(unit_of_observation)}</span></div>
+      <div><span class="meta-label">Column meaning</span><span>{transform_note_html}</span></div>
     </div>
-    <p class="spec-description">{html.escape(spec["spec_description"])}</p>
+    <p class="spec-description">{html.escape(description)}</p>
     <div class="formula-box">
-      <div class="formula-label">Regression specification</div>
-      <div class="formula">{spec["formula_html"]}</div>
+      <div class="formula-label">Regression Formula</div>
+      <div class="formula">{formula_html}</div>
     </div>
     {dataframe_to_html_table(table)}
   </section>
@@ -160,16 +314,16 @@ def write_report(
     output_root: Path,
     direct_panel_path: Path,
     island_panel_path: Path,
-    spec_tables: dict[str, pd.DataFrame],
-    tidy_results_by_spec: dict[str, pd.DataFrame],
+    section_tables: list[str],
+    tidy_frames: list[pd.DataFrame],
 ) -> None:
     output_root.mkdir(parents=True, exist_ok=True)
     coeff_path = output_root / "panel_regression_coefficients.csv"
-    pd.concat(list(tidy_results_by_spec.values()), ignore_index=True).to_csv(coeff_path, index=False)
+    pd.concat(tidy_frames, ignore_index=True).to_csv(coeff_path, index=False)
 
     html_path = output_root / "panel_regression_tables.html"
     css = """
-body { font-family: Georgia, "Times New Roman", serif; margin: 32px auto; max-width: 1280px; color: #102a43; line-height: 1.55; background: #f4f1ea; }
+body { font-family: Georgia, "Times New Roman", serif; margin: 32px auto; max-width: 1440px; color: #102a43; line-height: 1.55; background: #f4f1ea; }
 h1, h2 { color: #0b1f33; }
 h1 { margin-bottom: 10px; }
 h2 { margin: 0 0 14px; }
@@ -180,7 +334,6 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
 .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin: 0 0 16px; }
 .meta-grid div { background: #eef3f7; border-radius: 10px; padding: 10px 12px; }
 .meta-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #486581; margin-bottom: 4px; }
-.formula-inline { color: #0b1f33; font-size: 18px; }
 .spec-description { color: #243b53; margin-bottom: 14px; }
 .formula-box { background: #102a43; color: #fdfdfd; border-radius: 12px; padding: 14px 16px; margin: 0 0 18px; }
 .formula-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; margin-bottom: 8px; }
@@ -188,14 +341,10 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
 .reg-table { border-collapse: collapse; width: 100%; margin: 18px 0 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(16, 42, 67, 0.10); }
 .reg-table th { background: #0b1f33; color: #fdfdfd; padding: 11px 12px; text-align: center; border: 1px solid #102a43; }
 .reg-table td { border: 1px solid #bcccdc; padding: 9px 12px; vertical-align: top; background: #fffdf8; color: #102a43; }
-.reg-table td:first-child { font-weight: 600; width: 360px; background: #e6ecf2; color: #0b1f33; }
+.reg-table td:first-child { font-weight: 600; width: 320px; background: #e6ecf2; color: #0b1f33; }
 .reg-table tr:nth-child(even) td:not(:first-child) { background: #eef3f7; }
 .notes { color: #243b53; font-size: 14px; background: #e6ecf2; border-radius: 12px; padding: 16px 18px; margin-top: 28px; }
 """
-    spec_sections = [
-        render_spec_section(SPECIFICATIONS["direct_pair_binary_log"], direct_panel_path, spec_tables["direct_pair_binary_log"]),
-        render_spec_section(SPECIFICATIONS["island_system_binary_log"], island_panel_path, spec_tables["island_system_binary_log"]),
-    ]
     html_body = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -204,13 +353,17 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
   <style>{css}</style>
 </head>
 <body>
-  <h1>Panel Regression Tables</h1>
-  <p class="lead">These regressions keep only the cleaned day-fixed-effect binary congestion specifications. Dependent variables and continuous controls use <code>log(1 + x)</code>, so continuous-control coefficients are elasticity-style estimates and congestion-indicator coefficients are semi-elasticities with day and entity fixed effects.</p>
+  <h1>RTD PPML Regression Tables</h1>
+  <p class="lead">All reported estimates come from Poisson pseudo-maximum-likelihood models. Binary rows are exact percent effects for a dummy moving from 0 to 1. RTDREG continuous rows are reported as exact percent effects for a <code>+100 MW</code> change, which is usually easier to interpret here than a per-1-MW coefficient.</p>
 
-  {''.join(spec_sections)}
+  {''.join(section_tables)}
 
   <div class="notes">
-    <p>All specifications use <code>Day FE</code> plus entity fixed effects and <code>HC1</code> robust standard errors.</p>
+    <p>All specifications use day fixed effects and <code>HC1</code> robust standard errors.</p>
+    <p>The pooled direct-pair column includes pair fixed effects; the pair-specific columns do not because each sample contains one pair.</p>
+    <p>The pooled island-vs-system column includes island fixed effects; the island-specific columns do not because each sample contains one island.</p>
+    <p>The system price is the demand-weighted average of island prices using <code>MKT_REQT</code> weights at each 5-minute interval.</p>
+    <p>System-total RTDREG controls are excluded from all reported regressions.</p>
     <p>Significance stars: <code>* p&lt;0.10</code>, <code>** p&lt;0.05</code>, <code>*** p&lt;0.01</code>.</p>
     <p>Full tidy coefficient export: <code>{html.escape(str(coeff_path))}</code></p>
   </div>
@@ -218,75 +371,6 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
 </html>
 """
     html_path.write_text(html_body, encoding="utf-8")
-
-
-def prettify_log_term(term: str) -> str:
-    if not term.startswith("log1p_"):
-        return TERM_LABELS.get(term, term)
-    base = term.removeprefix("log1p_")
-    if base.endswith("_total"):
-        return f"log(1 + {base.removesuffix('_total').upper()} total)"
-    if base.endswith("_island"):
-        return f"log(1 + {base.removesuffix('_island').upper()} island)"
-    if base.endswith("_1"):
-        return f"log(1 + {base.removesuffix('_1').upper()} island 1)"
-    if base.endswith("_2"):
-        return f"log(1 + {base.removesuffix('_2').upper()} island 2)"
-    return f"log(1 + {base.upper()})"
-
-
-SPECIFICATIONS = {
-    "direct_pair_binary_log": {
-        "title": "Specification 1: Direct Pair Panel, Day FE Binary Congestion",
-        "panel_path_key": "direct",
-        "dep_var": "log1p_dep_abs_price_gap",
-        "dependent_label_html": "log(1 + |P<sub>i,t</sub> - P<sub>j,t</sub>|)",
-        "dependent_row_html": "log(1 + |P<sub>i,t</sub> - P<sub>j,t</sub>|)",
-        "dependent_description": "Log1p absolute price gap between the two directly connected islands at 5-minute interval t.",
-        "unit_of_observation": "Island-pair by 5-minute interval",
-        "rhs_terms": [
-            "link_congested_any",
-            "equip_cong_any_1",
-            "equip_cong_any_2",
-            *[f"log1p_{control}_{side}" for control in CONTROL_COLUMNS for side in ("1", "2", "total")],
-        ],
-        "always_terms": ["C(pair_key)", "C(fe_day)"],
-        "spec_description": "Uses binary congestion indicators for the inter-island link and each side of the pair, plus log1p RTDREG controls for LOSSES, GENERATION, MKT_IMPORT, and MKT_EXPORT at island-1, island-2, and system-total levels.",
-        "formula_html": (
-            "<em>log(1 + |P<sub>i,t</sub> - P<sub>j,t</sub>|)</em> = "
-            "&beta;<sub>1</sub> Link congestion + &beta;<sub>2</sub> Equipment congestion (island 1)"
-            " + &beta;<sub>3</sub> Equipment congestion (island 2)"
-            " + log(1 + controls)"
-            " + pair fixed effects + day fixed effects + &epsilon;<sub>i,j,t</sub>"
-        ),
-    },
-    "island_system_binary_log": {
-        "title": "Specification 2: Island-System Panel, Day FE Binary Congestion",
-        "panel_path_key": "island",
-        "dep_var": "log1p_dep_price_minus_sys",
-        "dependent_label_html": "log(1 + |P<sub>i,t</sub> - P<sub>sys,t</sub>|)",
-        "dependent_row_html": "log(1 + |P<sub>i,t</sub> - P<sub>sys,t</sub>|)",
-        "dependent_description": "Log1p absolute deviation between an island price and the demand-weighted system price at 5-minute interval t.",
-        "unit_of_observation": "Island by 5-minute interval",
-        "rhs_terms": [
-            "equip_cong_any",
-            *[f"log1p_{control}_{side}" for control in CONTROL_COLUMNS for side in ("island", "total")],
-        ],
-        "always_terms": ["C(island_code)", "C(fe_day)"],
-        "spec_description": "Uses the binary island equipment-congestion indicator plus log1p RTDREG controls for LOSSES, GENERATION, MKT_IMPORT, and MKT_EXPORT at island and system-total levels.",
-        "formula_html": (
-            "<em>log(1 + |P<sub>i,t</sub> - P<sub>sys,t</sub>|)</em> = "
-            "&beta;<sub>1</sub> Equipment congestion + log(1 + controls)"
-            " + island fixed effects + day fixed effects + &epsilon;<sub>i,t</sub>"
-        ),
-    },
-}
-
-
-def fit_model(frame: pd.DataFrame, dep_var: str, rhs_terms: list[str], always_terms: list[str]) -> object:
-    rhs = " + ".join([*rhs_terms, *always_terms])
-    formula = f"{dep_var} ~ {rhs}"
-    return smf.ols(formula=formula, data=frame).fit(cov_type="HC1")
 
 
 def main() -> None:
@@ -303,31 +387,227 @@ def main() -> None:
 
     direct_frame = load_panel(direct_panel_path)
     island_frame = load_panel(island_panel_path)
-    direct_frame = add_log1p_columns(
+
+    tidy_frames: list[pd.DataFrame] = []
+    section_tables: list[str] = []
+
+    direct_concepts = [
+        {"label": "link_congested_any", "term": "link_congested_any"},
+        {"label": "equip_cong_any_1", "term": "equip_cong_any_1"},
+        {"label": "equip_overload_any_1", "term": "equip_overload_any_1"},
+        {"label": "equip_cong_any_2", "term": "equip_cong_any_2"},
+        {"label": "equip_overload_any_2", "term": "equip_overload_any_2"},
+        *[
+            {"label": f"{control}_{side}", "term": f"{control}_{side}"}
+            for control in CONTROL_COLUMNS
+            for side in ("1", "2")
+        ],
+    ]
+    direct_rhs = [concept["term"] for concept in direct_concepts]
+
+    direct_columns: list[dict[str, object]] = []
+    direct_pooled_rhs = select_estimable_terms(direct_frame, direct_rhs)
+    direct_pooled_result = fit_ppml(
         direct_frame,
-        ["dep_abs_price_gap", *[f"{control}_{side}" for control in CONTROL_COLUMNS for side in ("1", "2", "total")]],
+        "dep_abs_price_gap",
+        direct_pooled_rhs,
+        ["C(pair_key)", "C(fe_day)"],
     )
-    island_frame = add_log1p_columns(
+    tidy_frames.append(
+        tidy_results(
+            "direct_pair",
+            "pooled",
+            "dep_abs_price_gap",
+            direct_pooled_rhs,
+            direct_pooled_result,
+        )
+    )
+    direct_columns.append(
+        {
+            "title": "Pooled (Both Pairs)",
+            "sample_label": "Both direct pairs pooled",
+            "dependent_label": "|P_i,t - P_j,t|",
+            "result": direct_pooled_result,
+            "unit_fe": "Pair",
+            "calendar_fe": "Day",
+        }
+    )
+    for pair_key in ("CLUZ_CVIS", "CVIS_CMIN"):
+        pair_frame = direct_frame.loc[direct_frame["pair_key"] == pair_key].copy()
+        pair_rhs = select_estimable_terms(pair_frame, direct_rhs)
+        pair_result = fit_ppml(
+            pair_frame,
+            "dep_abs_price_gap",
+            pair_rhs,
+            ["C(fe_day)"],
+        )
+        tidy_frames.append(
+            tidy_results(
+                "direct_pair",
+                pair_key.lower(),
+                "dep_abs_price_gap",
+                pair_rhs,
+                pair_result,
+            )
+        )
+        direct_columns.append(
+            {
+                "title": PAIR_COLUMN_TITLES[pair_key],
+                "sample_label": PAIR_LABELS[pair_key],
+                "dependent_label": "|P_i,t - P_j,t|",
+                "result": pair_result,
+                "unit_fe": "No",
+                "calendar_fe": "Day",
+            }
+        )
+
+    direct_table = build_multi_column_table(
+        direct_concepts,
+        direct_columns,
+        extra_stats=[
+            ("Unit FE", lambda column: str(column["unit_fe"])),
+            ("Calendar FE", lambda column: str(column["calendar_fe"])),
+        ],
+    )
+    section_tables.append(
+        render_section(
+            "Specification 1: Direct Pair Price Gap",
+            direct_panel_path,
+            "Pooled and pair-specific direct-link samples",
+            "Island-pair by 5-minute interval",
+            (
+                "Explains the direct-pair absolute RTD price gap using the pair-specific inter-island "
+                "link congestion flag, equipment congestion and "
+                "overload indicators on each side of the pair, and island-level RTDREG controls. "
+                "System-total RTDREG controls are excluded."
+            ),
+            (
+                "All columns are PPML exact percent effects. Dummy rows are 0-to-1 effects. "
+                "Continuous RTDREG rows are exact percent effects for a <em>+100 MW</em> change."
+            ),
+            (
+                "<em>E[g<sub>ij,t</sub> | X]</em> = exp("
+                "&beta;<sub>1</sub> LinkCong<sub>ij,t</sub> + "
+                "&beta;<sub>2</sub> EquipCong<sub>i,t</sub> + "
+                "&beta;<sub>3</sub> Overload<sub>i,t</sub> + "
+                "&beta;<sub>4</sub> EquipCong<sub>j,t</sub> + "
+                "&beta;<sub>5</sub> Overload<sub>j,t</sub> + "
+                "&Gamma;X<sub>ij,t</sub> + &alpha;<sub>ij</sub> + &delta;<sub>d</sub>), "
+                "where <em>g<sub>ij,t</sub></em> = |P<sub>i,t</sub> - P<sub>j,t</sub>|."
+            ),
+            direct_table,
+        )
+    )
+
+    island_concepts = [
+        {"label": "interlink_congested_any", "term": "interlink_congested_any"},
+        {"label": "equip_cong_any", "term": "equip_cong_any"},
+        {"label": "equip_overload_any", "term": "equip_overload_any"},
+        *[
+            {"label": f"{control}_island", "term": f"{control}_island"}
+            for control in CONTROL_COLUMNS
+        ],
+    ]
+    island_rhs = [concept["term"] for concept in island_concepts]
+
+    island_columns: list[dict[str, object]] = []
+    island_pooled_rhs = select_estimable_terms(island_frame, island_rhs)
+    island_pooled_result = fit_ppml(
         island_frame,
-        ["dep_price_minus_sys", *[f"{control}_{side}" for control in CONTROL_COLUMNS for side in ("island", "total")]],
+        "dep_price_minus_sys",
+        island_pooled_rhs,
+        ["C(island_code)", "C(fe_day)"],
     )
+    tidy_frames.append(
+        tidy_results(
+            "island_vs_system",
+            "pooled",
+            "dep_price_minus_sys",
+            island_pooled_rhs,
+            island_pooled_result,
+        )
+    )
+    island_columns.append(
+        {
+            "title": "Pooled (All Islands)",
+            "sample_label": "All islands pooled",
+            "dependent_label": "|P_i,t - P_sys,t|",
+            "result": island_pooled_result,
+            "unit_fe": "Island",
+            "calendar_fe": "Day",
+        }
+    )
+    for island_code in ("CLUZ", "CVIS", "CMIN"):
+        focal_frame = island_frame.loc[island_frame["island_code"] == island_code].copy()
+        focal_rhs = select_estimable_terms(focal_frame, island_rhs)
+        focal_result = fit_ppml(
+            focal_frame,
+            "dep_price_minus_sys",
+            focal_rhs,
+            ["C(fe_day)"],
+        )
+        tidy_frames.append(
+            tidy_results(
+                "island_vs_system",
+                island_code.lower(),
+                "dep_price_minus_sys",
+                focal_rhs,
+                focal_result,
+            )
+        )
+        island_columns.append(
+            {
+                "title": ISLAND_COLUMN_TITLES[island_code],
+                "sample_label": ISLAND_LABELS[island_code],
+                "dependent_label": "|P_i,t - P_sys,t|",
+                "result": focal_result,
+                "unit_fe": "No",
+                "calendar_fe": "Day",
+            }
+        )
 
-    frames = {"direct": direct_frame, "island": island_frame}
-    spec_tables: dict[str, pd.DataFrame] = {}
-    tidy_results_by_spec: dict[str, pd.DataFrame] = {}
-
-    for spec_key, spec in SPECIFICATIONS.items():
-        frame = frames[spec["panel_path_key"]]
-        result = fit_model(frame, spec["dep_var"], spec["rhs_terms"], spec["always_terms"])
-        tidy_results_by_spec[spec_key] = tidy_results(spec_key, spec["dep_var"], spec["rhs_terms"], result)
-        spec_tables[spec_key] = build_display_table(spec["rhs_terms"], result, spec["dependent_row_html"])
+    island_table = build_multi_column_table(
+        island_concepts,
+        island_columns,
+        extra_stats=[
+            ("Unit FE", lambda column: str(column["unit_fe"])),
+            ("Calendar FE", lambda column: str(column["calendar_fe"])),
+        ],
+    )
+    section_tables.append(
+        render_section(
+            "Specification 2: Island Against System",
+            island_panel_path,
+            "Pooled and island-specific samples",
+            "Island by 5-minute interval",
+            (
+                "Explains the absolute deviation between the focal island RTD price and the demand-weighted "
+                "system RTD price using an island-specific any-connected-inter-link congestion flag, focal-island equipment congestion "
+                "and overload indicators, and focal-island RTDREG controls. System-total RTDREG controls are excluded."
+            ),
+            (
+                "All columns are PPML exact percent effects. Dummy rows are 0-to-1 effects. "
+                "Continuous RTDREG rows are exact percent effects for a <em>+100 MW</em> change."
+            ),
+            (
+                "<em>E[g<sub>i,t</sub> | X]</em> = exp("
+                "&beta;<sub>1</sub> AnyConnectedInterLinkCong<sub>i,t</sub> + "
+                "&beta;<sub>2</sub> EquipCong<sub>i,t</sub> + "
+                "&beta;<sub>3</sub> Overload<sub>i,t</sub> + "
+                "&Gamma;X<sub>i,t</sub> + &alpha;<sub>i</sub> + &delta;<sub>d</sub>), "
+                "where <em>g<sub>i,t</sub></em> = |P<sub>i,t</sub> - P<sub>sys,t</sub>| and "
+                "<em>P<sub>sys,t</sub></em> is the demand-weighted system price."
+            ),
+            island_table,
+        )
+    )
 
     write_report(
         output_root,
         direct_panel_path,
         island_panel_path,
-        spec_tables,
-        tidy_results_by_spec,
+        section_tables,
+        tidy_frames,
     )
 
     print(f"Wrote {output_root / 'panel_regression_tables.html'}")

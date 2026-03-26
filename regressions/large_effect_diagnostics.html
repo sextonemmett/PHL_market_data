@@ -1,0 +1,2036 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Large Effect Diagnostics</title>
+  <style>
+body { font-family: Georgia, "Times New Roman", serif; margin: 32px auto; max-width: 1440px; color: #102a43; line-height: 1.55; background: #f4f1ea; }
+h1, h2, h3 { color: #0b1f33; }
+h1 { margin-bottom: 10px; }
+h2 { margin: 22px 0 12px; }
+h3 { margin: 18px 0 10px; }
+p { margin: 0 0 14px; }
+code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px; }
+.lead { font-size: 17px; color: #243b53; margin-bottom: 22px; }
+.summary-card, .diag-card { background: #faf7f1; border: 1px solid #d9e2ec; border-radius: 14px; padding: 22px 24px; margin: 22px 0 28px; box-shadow: 0 10px 28px rgba(16, 42, 67, 0.08); }
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin: 0 0 14px; }
+.meta-grid div { background: #eef3f7; border-radius: 10px; padding: 10px 12px; }
+.meta-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #486581; margin-bottom: 4px; }
+.verdict { font-size: 16px; color: #102a43; background: #e6ecf2; border-left: 6px solid #486581; padding: 12px 14px; border-radius: 10px; margin-bottom: 18px; }
+.report-table { border-collapse: collapse; width: 100%; margin: 14px 0 18px; font-size: 14px; box-shadow: 0 8px 24px rgba(16, 42, 67, 0.10); }
+.report-table th { background: #0b1f33; color: #fdfdfd; padding: 10px 12px; text-align: center; border: 1px solid #102a43; }
+.report-table td { border: 1px solid #bcccdc; padding: 8px 12px; vertical-align: top; background: #fffdf8; color: #102a43; }
+.report-table td:first-child { font-weight: 600; background: #e6ecf2; color: #0b1f33; }
+.report-table tr:nth-child(even) td:not(:first-child) { background: #eef3f7; }
+</style>
+</head>
+<body>
+  <h1>Large Effect Diagnostics</h1>
+  <p class="lead">This report flags coefficients from <code>regressions/panel_regression_coefficients.csv</code> whose absolute reported effect exceeds <code>1,000%</code>, then diagnoses whether the effect is coming from sparse support, tail concentration, scarcity-style intervals, or a more stable pattern. Winsor checks use <code>0.99, 0.995</code>.</p>
+
+  <section class="summary-card">
+    <h2>Flagged Coefficients</h2>
+    <p>6 coefficients exceeded the threshold out of 65 non-intercept reported rows.</p>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>specification</th>
+      <th>term</th>
+      <th>baseline_effect_pct</th>
+      <th>classification</th>
+      <th>mechanism</th>
+      <th>prevalence_or_top_decile_share</th>
+      <th>untreated_mean_outcome</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>direct_pair / cluz_cvis</td>
+      <td>Pair-Specific Link Congestion</td>
+      <td>1,033,315.9429</td>
+      <td>Sparse-support</td>
+      <td>The untreated baseline is nearly degenerate, so even moderate treated-state gaps translate into extremely large percent effects.</td>
+      <td>0.4364</td>
+      <td>0.3998</td>
+    </tr>
+    <tr>
+      <td>direct_pair / cvis_cmin</td>
+      <td>Pair-Specific Link Congestion</td>
+      <td>1,922.9294</td>
+      <td>Stable</td>
+      <td>The indicator is heavily concentrated in the extreme right tail of the outcome, so the estimate is largely tracking scarcity-like tail episodes.</td>
+      <td>0.0985</td>
+      <td>194.2755</td>
+    </tr>
+    <tr>
+      <td>direct_pair / cvis_cmin</td>
+      <td>Losses: Island 2 (+100 MW)</td>
+      <td>4,197.2262</td>
+      <td>Stable</td>
+      <td>The large continuous-control effect is tied to the outcome tail: extreme gaps are disproportionately concentrated when the regressor is in its upper tail.</td>
+      <td>0.1002</td>
+      <td>647.9882</td>
+    </tr>
+    <tr>
+      <td>direct_pair / pooled</td>
+      <td>Pair-Specific Link Congestion</td>
+      <td>4,391.1818</td>
+      <td>Stable</td>
+      <td>The indicator is heavily concentrated in the extreme right tail of the outcome, so the estimate is largely tracking scarcity-like tail episodes.</td>
+      <td>0.2674</td>
+      <td>119.6959</td>
+    </tr>
+    <tr>
+      <td>island_vs_system / cluz</td>
+      <td>Any Connected Inter-Link Congestion</td>
+      <td>1,767.9714</td>
+      <td>Stable</td>
+      <td>The indicator is heavily concentrated in the extreme right tail of the outcome, so the estimate is largely tracking scarcity-like tail episodes.</td>
+      <td>0.4364</td>
+      <td>84.7330</td>
+    </tr>
+    <tr>
+      <td>island_vs_system / cvis</td>
+      <td>Any Connected Inter-Link Congestion</td>
+      <td>11,961.4151</td>
+      <td>Stable</td>
+      <td>The indicator is heavily concentrated in the extreme right tail of the outcome, so the estimate is largely tracking scarcity-like tail episodes.</td>
+      <td>0.5136</td>
+      <td>14.1940</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  
+  <section class="diag-card">
+    <h2>Direct Pair Price Gap / Luzon-Visayas / Pair-Specific Link Congestion</h2>
+    <div class="verdict"><strong>Sparse-support</strong>: The untreated baseline is nearly degenerate, so even moderate treated-state gaps translate into extremely large percent effects.</div>
+    <div class="meta-grid">
+      <div><span class="meta-label">Baseline effect</span><span>1,033,315.94%</span></div>
+      <div><span class="meta-label">Sample</span><span>Luzon-Visayas</span></div>
+      <div><span class="meta-label">Outcome</span><span>|P_i,t - P_j,t|</span></div>
+      <div><span class="meta-label">Sign matches</span><span>5 of 5 primary variants</span></div>
+    </div>
+    <h3>Support Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>state</th>
+      <th>rows</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>max</th>
+      <th>zero_share</th>
+      <th>near_zero_share</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>14752</td>
+      <td>0.3998</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>2,809.8292</td>
+      <td>0.9998</td>
+      <td>0.9998</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>11422</td>
+      <td>5,244.5374</td>
+      <td>2,579.4624</td>
+      <td>13,511.2615</td>
+      <td>28,068.8473</td>
+      <td>123,229.2055</td>
+      <td>0.0005</td>
+      <td>0.0005</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Overlap With Other Congestion Indicators</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>other_indicator</th>
+      <th>share_when_term_0</th>
+      <th>share_when_term_1</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Equipment Congestion: Island 1</td>
+      <td>0.0509</td>
+      <td>0.0284</td>
+    </tr>
+    <tr>
+      <td>Overload > 0: Island 1</td>
+      <td>0.0009</td>
+      <td>0.0004</td>
+    </tr>
+    <tr>
+      <td>Equipment Congestion: Island 2</td>
+      <td>0.0367</td>
+      <td>0.1621</td>
+    </tr>
+    <tr>
+      <td>Overload > 0: Island 2</td>
+      <td>0.0350</td>
+      <td>0.1502</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Tail Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>tail</th>
+      <th>outcome_cutoff</th>
+      <th>tail_rows</th>
+      <th>indicator_share_in_tail</th>
+      <th>indicator_share_overall</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Top 1.0%</td>
+      <td>25,358.4158</td>
+      <td>262</td>
+      <td>1.0000</td>
+      <td>0.4364</td>
+    </tr>
+    <tr>
+      <td>Top 0.5%</td>
+      <td>27,578.4618</td>
+      <td>131</td>
+      <td>1.0000</td>
+      <td>0.4364</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Outcome After Winsorizing / Trimming</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>state</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>variant</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>0.3998</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>Original</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>5,244.5374</td>
+      <td>2,579.4624</td>
+      <td>13,511.2615</td>
+      <td>28,068.8473</td>
+      <td>Original</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>0.3998</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>Winsor @ 0.990</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>5,049.9987</td>
+      <td>2,579.4624</td>
+      <td>13,511.2615</td>
+      <td>25,358.4158</td>
+      <td>Winsor @ 0.990</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>0.3998</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>Winsor @ 0.995</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>5,086.1808</td>
+      <td>2,579.4624</td>
+      <td>13,511.2615</td>
+      <td>27,578.4618</td>
+      <td>Winsor @ 0.995</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>0.3998</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>Trim Top 1%</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>4,573.2240</td>
+      <td>2,513.4214</td>
+      <td>12,555.7385</td>
+      <td>23,386.0318</td>
+      <td>Trim Top 1%</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Specification Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>variant</th>
+      <th>term_in_model</th>
+      <th>estimate</th>
+      <th>estimate_unit</th>
+      <th>coef</th>
+      <th>std_err</th>
+      <th>pvalue</th>
+      <th>nobs</th>
+      <th>sign</th>
+      <th>matches_baseline_sign</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Baseline PPML</td>
+      <td>Yes</td>
+      <td>1,033,315.94%</td>
+      <td>percent_effect</td>
+      <td>9.2432</td>
+      <td>0.6766</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>winsor_p99_ppml</td>
+      <td>Yes</td>
+      <td>1,035,602.10%</td>
+      <td>percent_effect</td>
+      <td>9.2454</td>
+      <td>0.6766</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Winsorized PPML @ p99.5</td>
+      <td>Yes</td>
+      <td>1,037,177.41%</td>
+      <td>percent_effect</td>
+      <td>9.2469</td>
+      <td>0.6766</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Trim Top 1% PPML</td>
+      <td>Yes</td>
+      <td>1,025,602.02%</td>
+      <td>percent_effect</td>
+      <td>9.2357</td>
+      <td>0.6776</td>
+      <td>0.0000</td>
+      <td>25912</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Scarcity-Excluded PPML</td>
+      <td>Yes</td>
+      <td>711,088.39%</td>
+      <td>percent_effect</td>
+      <td>8.8695</td>
+      <td>0.6770</td>
+      <td>0.0000</td>
+      <td>25381</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OLS Levels</td>
+      <td>Yes</td>
+      <td>4,021.3958</td>
+      <td>level_coefficient</td>
+      <td>4,021.3958</td>
+      <td>59.4301</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OLS log(1 + y)</td>
+      <td>Yes</td>
+      <td>141,538.75%</td>
+      <td>percent_effect</td>
+      <td>7.2559</td>
+      <td>0.0200</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Fixed-Effect Identification Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>support_check</th>
+      <th>share</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Day FE cells with both states</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Entity cells with both states</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Entity-by-day cells with both states</td>
+      <td>1.0000</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="diag-card">
+    <h2>Direct Pair Price Gap / Visayas-Mindanao / Pair-Specific Link Congestion</h2>
+    <div class="verdict"><strong>Stable</strong>: The indicator is heavily concentrated in the extreme right tail of the outcome, so the estimate is largely tracking scarcity-like tail episodes.</div>
+    <div class="meta-grid">
+      <div><span class="meta-label">Baseline effect</span><span>1,922.93%</span></div>
+      <div><span class="meta-label">Sample</span><span>Visayas-Mindanao</span></div>
+      <div><span class="meta-label">Outcome</span><span>|P_i,t - P_j,t|</span></div>
+      <div><span class="meta-label">Sign matches</span><span>5 of 5 primary variants</span></div>
+    </div>
+    <h3>Support Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>state</th>
+      <th>rows</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>max</th>
+      <th>zero_share</th>
+      <th>near_zero_share</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>23597</td>
+      <td>194.2755</td>
+      <td>65.7808</td>
+      <td>351.3327</td>
+      <td>2,312.3322</td>
+      <td>47,463.0006</td>
+      <td>0.0425</td>
+      <td>0.0425</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>2577</td>
+      <td>5,801.4335</td>
+      <td>2,498.3898</td>
+      <td>15,644.7110</td>
+      <td>32,655.4948</td>
+      <td>113,882.5241</td>
+      <td>0.0008</td>
+      <td>0.0008</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Overlap With Other Congestion Indicators</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>other_indicator</th>
+      <th>share_when_term_0</th>
+      <th>share_when_term_1</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Equipment Congestion: Island 1</td>
+      <td>0.0974</td>
+      <td>0.0365</td>
+    </tr>
+    <tr>
+      <td>Overload > 0: Island 1</td>
+      <td>0.0925</td>
+      <td>0.0194</td>
+    </tr>
+    <tr>
+      <td>Equipment Congestion: Island 2</td>
+      <td>0.0004</td>
+      <td>0.0031</td>
+    </tr>
+    <tr>
+      <td>Overload > 0: Island 2</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Tail Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>tail</th>
+      <th>outcome_cutoff</th>
+      <th>tail_rows</th>
+      <th>indicator_share_in_tail</th>
+      <th>indicator_share_overall</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Top 1.0%</td>
+      <td>15,835.8778</td>
+      <td>262</td>
+      <td>0.9656</td>
+      <td>0.0985</td>
+    </tr>
+    <tr>
+      <td>Top 0.5%</td>
+      <td>20,842.7856</td>
+      <td>131</td>
+      <td>0.9313</td>
+      <td>0.0985</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Outcome After Winsorizing / Trimming</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>state</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>variant</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>194.2755</td>
+      <td>65.7808</td>
+      <td>351.3327</td>
+      <td>2,312.3322</td>
+      <td>Original</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>5,801.4335</td>
+      <td>2,498.3898</td>
+      <td>15,644.7110</td>
+      <td>32,655.4948</td>
+      <td>Original</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>183.0916</td>
+      <td>65.7808</td>
+      <td>351.3327</td>
+      <td>2,312.3322</td>
+      <td>Winsor @ 0.990</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>4,953.3754</td>
+      <td>2,498.3898</td>
+      <td>15,644.7110</td>
+      <td>15,835.8778</td>
+      <td>Winsor @ 0.990</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>185.0012</td>
+      <td>65.7808</td>
+      <td>351.3327</td>
+      <td>2,312.3322</td>
+      <td>Winsor @ 0.995</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>5,320.2689</td>
+      <td>2,498.3898</td>
+      <td>15,644.7110</td>
+      <td>20,842.7856</td>
+      <td>Winsor @ 0.995</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>177.1192</td>
+      <td>65.7607</td>
+      <td>350.6912</td>
+      <td>2,290.3897</td>
+      <td>Trim Top 1%</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>3,768.6624</td>
+      <td>2,254.5558</td>
+      <td>12,198.7309</td>
+      <td>15,195.0042</td>
+      <td>Trim Top 1%</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Specification Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>variant</th>
+      <th>term_in_model</th>
+      <th>estimate</th>
+      <th>estimate_unit</th>
+      <th>coef</th>
+      <th>std_err</th>
+      <th>pvalue</th>
+      <th>nobs</th>
+      <th>sign</th>
+      <th>matches_baseline_sign</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Baseline PPML</td>
+      <td>Yes</td>
+      <td>1,922.93%</td>
+      <td>percent_effect</td>
+      <td>3.0071</td>
+      <td>0.0658</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>winsor_p99_ppml</td>
+      <td>Yes</td>
+      <td>1,842.41%</td>
+      <td>percent_effect</td>
+      <td>2.9665</td>
+      <td>0.0506</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Winsorized PPML @ p99.5</td>
+      <td>Yes</td>
+      <td>1,878.44%</td>
+      <td>percent_effect</td>
+      <td>2.9849</td>
+      <td>0.0532</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Trim Top 1% PPML</td>
+      <td>Yes</td>
+      <td>1,762.12%</td>
+      <td>percent_effect</td>
+      <td>2.9243</td>
+      <td>0.0514</td>
+      <td>0.0000</td>
+      <td>25912</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Scarcity-Excluded PPML</td>
+      <td>Yes</td>
+      <td>1,410.63%</td>
+      <td>percent_effect</td>
+      <td>2.7151</td>
+      <td>0.0511</td>
+      <td>0.0000</td>
+      <td>25344</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OLS Levels</td>
+      <td>Yes</td>
+      <td>6,421.8894</td>
+      <td>level_coefficient</td>
+      <td>6,421.8894</td>
+      <td>266.2340</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OLS log(1 + y)</td>
+      <td>Yes</td>
+      <td>1,201.61%</td>
+      <td>percent_effect</td>
+      <td>2.5662</td>
+      <td>0.0412</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Fixed-Effect Identification Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>support_check</th>
+      <th>share</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Day FE cells with both states</td>
+      <td>0.5714</td>
+    </tr>
+    <tr>
+      <td>Entity cells with both states</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Entity-by-day cells with both states</td>
+      <td>0.5714</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="diag-card">
+    <h2>Direct Pair Price Gap / Visayas-Mindanao / Losses: Island 2 (+100 MW)</h2>
+    <div class="verdict"><strong>Stable</strong>: The large continuous-control effect is tied to the outcome tail: extreme gaps are disproportionately concentrated when the regressor is in its upper tail.</div>
+    <div class="meta-grid">
+      <div><span class="meta-label">Baseline effect</span><span>4,197.23%</span></div>
+      <div><span class="meta-label">Sample</span><span>Visayas-Mindanao</span></div>
+      <div><span class="meta-label">Outcome</span><span>|P_i,t - P_j,t|</span></div>
+      <div><span class="meta-label">Sign matches</span><span>5 of 5 primary variants</span></div>
+    </div>
+    <h3>Support Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>metric</th>
+      <th>value</th>
+      <th>high_regressor</th>
+      <th>rows</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>rows</td>
+      <td>26,174.0000</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>mean</td>
+      <td>54.5704</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>median</td>
+      <td>54.2900</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>p90</td>
+      <td>73.1900</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>p99</td>
+      <td>92.2254</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>max</td>
+      <td>112.9100</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>zero_share</td>
+      <td>0.0000</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>top_decile_share</td>
+      <td>0.1002</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>NaN</td>
+      <td></td>
+      <td>0.0000</td>
+      <td>23,552.0000</td>
+      <td>647.9882</td>
+      <td>70.8779</td>
+      <td>743.3664</td>
+      <td>14,617.2568</td>
+    </tr>
+    <tr>
+      <td>NaN</td>
+      <td></td>
+      <td>1.0000</td>
+      <td>2,622.0000</td>
+      <td>1,629.7470</td>
+      <td>185.0736</td>
+      <td>2,286.4670</td>
+      <td>24,827.3078</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Overlap With Other Congestion Indicators</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>indicator</th>
+      <th>share_when_regressor_below_top_decile</th>
+      <th>share_when_regressor_in_top_decile</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Pair-Specific Link Congestion</td>
+      <td>0.0987</td>
+      <td>0.0961</td>
+    </tr>
+    <tr>
+      <td>Equipment Congestion: Island 1</td>
+      <td>0.0842</td>
+      <td>0.1564</td>
+    </tr>
+    <tr>
+      <td>Overload > 0: Island 1</td>
+      <td>0.0788</td>
+      <td>0.1434</td>
+    </tr>
+    <tr>
+      <td>Equipment Congestion: Island 2</td>
+      <td>0.0006</td>
+      <td>0.0011</td>
+    </tr>
+    <tr>
+      <td>Overload > 0: Island 2</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Tail Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>tail</th>
+      <th>outcome_cutoff</th>
+      <th>tail_rows</th>
+      <th>share_in_regressor_top_decile</th>
+      <th>overall_top_decile_share</th>
+      <th>mean_regressor_in_tail</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Top 1.0%</td>
+      <td>15,835.8778</td>
+      <td>262</td>
+      <td>0.2939</td>
+      <td>0.1002</td>
+      <td>68.7363</td>
+    </tr>
+    <tr>
+      <td>Top 0.5%</td>
+      <td>20,842.7856</td>
+      <td>131</td>
+      <td>0.4122</td>
+      <td>0.1002</td>
+      <td>70.3985</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Outcome After Winsorizing / Trimming</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>variant</th>
+      <th>outcome_mean</th>
+      <th>outcome_median</th>
+      <th>outcome_p99</th>
+      <th>regressor_mean</th>
+      <th>regressor_p99</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Original</td>
+      <td>746.3366</td>
+      <td>76.7800</td>
+      <td>15,835.8778</td>
+      <td>54.5704</td>
+      <td>92.2254</td>
+    </tr>
+    <tr>
+      <td>Winsor @ 0.990</td>
+      <td>652.7569</td>
+      <td>76.7800</td>
+      <td>15,835.1650</td>
+      <td>54.5704</td>
+      <td>92.2254</td>
+    </tr>
+    <tr>
+      <td>Winsor @ 0.995</td>
+      <td>690.6016</td>
+      <td>76.7800</td>
+      <td>15,835.8778</td>
+      <td>54.5704</td>
+      <td>92.2254</td>
+    </tr>
+    <tr>
+      <td>Trim Top 1%</td>
+      <td>499.2382</td>
+      <td>75.6520</td>
+      <td>11,791.5074</td>
+      <td>54.4272</td>
+      <td>92.2767</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Specification Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>variant</th>
+      <th>term_in_model</th>
+      <th>estimate</th>
+      <th>estimate_unit</th>
+      <th>coef</th>
+      <th>std_err</th>
+      <th>pvalue</th>
+      <th>nobs</th>
+      <th>sign</th>
+      <th>matches_baseline_sign</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Baseline PPML</td>
+      <td>Yes</td>
+      <td>4,197.23%</td>
+      <td>percent_effect</td>
+      <td>0.0376</td>
+      <td>0.0048</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>winsor_p99_ppml</td>
+      <td>Yes</td>
+      <td>14,315.96%</td>
+      <td>percent_effect</td>
+      <td>0.0497</td>
+      <td>0.0038</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Winsorized PPML @ p99.5</td>
+      <td>Yes</td>
+      <td>11,865.12%</td>
+      <td>percent_effect</td>
+      <td>0.0478</td>
+      <td>0.0039</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Trim Top 1% PPML</td>
+      <td>Yes</td>
+      <td>29,170.17%</td>
+      <td>percent_effect</td>
+      <td>0.0568</td>
+      <td>0.0039</td>
+      <td>0.0000</td>
+      <td>25912</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Scarcity-Excluded PPML</td>
+      <td>Yes</td>
+      <td>3,740.04%</td>
+      <td>percent_effect</td>
+      <td>0.0365</td>
+      <td>0.0035</td>
+      <td>0.0000</td>
+      <td>25344</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OLS Levels</td>
+      <td>Yes</td>
+      <td>14.1909</td>
+      <td>level_coefficient</td>
+      <td>14.1909</td>
+      <td>4.0520</td>
+      <td>0.0005</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OLS log(1 + y)</td>
+      <td>Yes</td>
+      <td>13,708.99%</td>
+      <td>percent_effect</td>
+      <td>0.0493</td>
+      <td>0.0020</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Fixed-Effect Identification Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>support_check</th>
+      <th>share</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Day FE cells with variation</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Entity cells with variation</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Entity-by-day cells with variation</td>
+      <td>1.0000</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="diag-card">
+    <h2>Direct Pair Price Gap / Pooled (Both Pairs) / Pair-Specific Link Congestion</h2>
+    <div class="verdict"><strong>Stable</strong>: The indicator is heavily concentrated in the extreme right tail of the outcome, so the estimate is largely tracking scarcity-like tail episodes.</div>
+    <div class="meta-grid">
+      <div><span class="meta-label">Baseline effect</span><span>4,391.18%</span></div>
+      <div><span class="meta-label">Sample</span><span>Pooled (Both Pairs)</span></div>
+      <div><span class="meta-label">Outcome</span><span>|P_i,t - P_j,t|</span></div>
+      <div><span class="meta-label">Sign matches</span><span>5 of 5 primary variants</span></div>
+    </div>
+    <h3>Support Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>state</th>
+      <th>rows</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>max</th>
+      <th>zero_share</th>
+      <th>near_zero_share</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>38349</td>
+      <td>119.6959</td>
+      <td>16.4241</td>
+      <td>226.3639</td>
+      <td>1,617.9013</td>
+      <td>47,463.0006</td>
+      <td>0.4107</td>
+      <td>0.4107</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>13999</td>
+      <td>5,347.0534</td>
+      <td>2,560.0989</td>
+      <td>14,129.2449</td>
+      <td>28,648.9125</td>
+      <td>123,229.2055</td>
+      <td>0.0006</td>
+      <td>0.0006</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Overlap With Other Congestion Indicators</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>other_indicator</th>
+      <th>share_when_term_0</th>
+      <th>share_when_term_1</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Equipment Congestion: Island 1</td>
+      <td>0.0795</td>
+      <td>0.0299</td>
+    </tr>
+    <tr>
+      <td>Overload > 0: Island 1</td>
+      <td>0.0573</td>
+      <td>0.0039</td>
+    </tr>
+    <tr>
+      <td>Equipment Congestion: Island 2</td>
+      <td>0.0144</td>
+      <td>0.1329</td>
+    </tr>
+    <tr>
+      <td>Overload > 0: Island 2</td>
+      <td>0.0135</td>
+      <td>0.1226</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Tail Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>tail</th>
+      <th>outcome_cutoff</th>
+      <th>tail_rows</th>
+      <th>indicator_share_in_tail</th>
+      <th>indicator_share_overall</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Top 1.0%</td>
+      <td>22,280.1501</td>
+      <td>524</td>
+      <td>0.9828</td>
+      <td>0.2674</td>
+    </tr>
+    <tr>
+      <td>Top 0.5%</td>
+      <td>26,178.1926</td>
+      <td>262</td>
+      <td>0.9656</td>
+      <td>0.2674</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Outcome After Winsorizing / Trimming</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>state</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>variant</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>119.6959</td>
+      <td>16.4241</td>
+      <td>226.3639</td>
+      <td>1,617.9013</td>
+      <td>Original</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>5,347.0534</td>
+      <td>2,560.0989</td>
+      <td>14,129.2449</td>
+      <td>28,648.9125</td>
+      <td>Original</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>114.3265</td>
+      <td>16.4241</td>
+      <td>226.3639</td>
+      <td>1,617.9013</td>
+      <td>Winsor @ 0.990</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>5,034.6783</td>
+      <td>2,560.0989</td>
+      <td>14,129.2449</td>
+      <td>22,280.1501</td>
+      <td>Winsor @ 0.990</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>115.2413</td>
+      <td>16.4241</td>
+      <td>226.3639</td>
+      <td>1,617.9013</td>
+      <td>Winsor @ 0.995</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>5,143.3183</td>
+      <td>2,560.0989</td>
+      <td>14,129.2449</td>
+      <td>26,178.1926</td>
+      <td>Winsor @ 0.995</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>109.1233</td>
+      <td>16.4043</td>
+      <td>226.0559</td>
+      <td>1,586.5568</td>
+      <td>Trim Top 1%</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>4,376.0148</td>
+      <td>2,482.1069</td>
+      <td>12,489.5616</td>
+      <td>20,255.3416</td>
+      <td>Trim Top 1%</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Specification Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>variant</th>
+      <th>term_in_model</th>
+      <th>estimate</th>
+      <th>estimate_unit</th>
+      <th>coef</th>
+      <th>std_err</th>
+      <th>pvalue</th>
+      <th>nobs</th>
+      <th>sign</th>
+      <th>matches_baseline_sign</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Baseline PPML</td>
+      <td>Yes</td>
+      <td>4,391.18%</td>
+      <td>percent_effect</td>
+      <td>3.8047</td>
+      <td>0.0382</td>
+      <td>0.0000</td>
+      <td>52348</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>winsor_p99_ppml</td>
+      <td>Yes</td>
+      <td>4,425.52%</td>
+      <td>percent_effect</td>
+      <td>3.8123</td>
+      <td>0.0312</td>
+      <td>0.0000</td>
+      <td>52348</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Winsorized PPML @ p99.5</td>
+      <td>Yes</td>
+      <td>4,390.05%</td>
+      <td>percent_effect</td>
+      <td>3.8044</td>
+      <td>0.0325</td>
+      <td>0.0000</td>
+      <td>52348</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Trim Top 1% PPML</td>
+      <td>Yes</td>
+      <td>4,872.69%</td>
+      <td>percent_effect</td>
+      <td>3.9065</td>
+      <td>0.0315</td>
+      <td>0.0000</td>
+      <td>51824</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Scarcity-Excluded PPML</td>
+      <td>Yes</td>
+      <td>4,077.26%</td>
+      <td>percent_effect</td>
+      <td>3.7322</td>
+      <td>0.0325</td>
+      <td>0.0000</td>
+      <td>50725</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OLS Levels</td>
+      <td>Yes</td>
+      <td>4,804.3989</td>
+      <td>level_coefficient</td>
+      <td>4,804.3989</td>
+      <td>61.5183</td>
+      <td>0.0000</td>
+      <td>52348</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OLS log(1 + y)</td>
+      <td>Yes</td>
+      <td>56,525.55%</td>
+      <td>percent_effect</td>
+      <td>6.3390</td>
+      <td>0.0202</td>
+      <td>0.0000</td>
+      <td>52348</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Fixed-Effect Identification Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>support_check</th>
+      <th>share</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Day FE cells with both states</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Entity cells with both states</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Entity-by-day cells with both states</td>
+      <td>0.7857</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="diag-card">
+    <h2>Island Against System / Luzon vs System / Any Connected Inter-Link Congestion</h2>
+    <div class="verdict"><strong>Stable</strong>: The indicator is heavily concentrated in the extreme right tail of the outcome, so the estimate is largely tracking scarcity-like tail episodes.</div>
+    <div class="meta-grid">
+      <div><span class="meta-label">Baseline effect</span><span>1,767.97%</span></div>
+      <div><span class="meta-label">Sample</span><span>Luzon vs System</span></div>
+      <div><span class="meta-label">Outcome</span><span>|P_i,t - P_sys,t|</span></div>
+      <div><span class="meta-label">Sign matches</span><span>5 of 5 primary variants</span></div>
+    </div>
+    <h3>Support Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>state</th>
+      <th>rows</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>max</th>
+      <th>zero_share</th>
+      <th>near_zero_share</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>14752</td>
+      <td>84.7330</td>
+      <td>10.1718</td>
+      <td>119.2275</td>
+      <td>1,954.9323</td>
+      <td>6,184.0665</td>
+      <td>0.0313</td>
+      <td>0.1057</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>11422</td>
+      <td>1,497.9523</td>
+      <td>789.9896</td>
+      <td>3,973.3688</td>
+      <td>7,986.7643</td>
+      <td>39,703.4561</td>
+      <td>0.0003</td>
+      <td>0.0058</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Overlap With Other Congestion Indicators</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>other_indicator</th>
+      <th>share_when_term_0</th>
+      <th>share_when_term_1</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Equipment Congestion: Focal Island</td>
+      <td>0.0509</td>
+      <td>0.0284</td>
+    </tr>
+    <tr>
+      <td>Overload > 0: Focal Island</td>
+      <td>0.0009</td>
+      <td>0.0004</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Tail Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>tail</th>
+      <th>outcome_cutoff</th>
+      <th>tail_rows</th>
+      <th>indicator_share_in_tail</th>
+      <th>indicator_share_overall</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Top 1.0%</td>
+      <td>6,746.0332</td>
+      <td>262</td>
+      <td>1.0000</td>
+      <td>0.4364</td>
+    </tr>
+    <tr>
+      <td>Top 0.5%</td>
+      <td>7,834.3418</td>
+      <td>131</td>
+      <td>1.0000</td>
+      <td>0.4364</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Outcome After Winsorizing / Trimming</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>state</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>variant</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>84.7330</td>
+      <td>10.1718</td>
+      <td>119.2275</td>
+      <td>1,954.9323</td>
+      <td>Original</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>1,497.9523</td>
+      <td>789.9896</td>
+      <td>3,973.3688</td>
+      <td>7,986.7643</td>
+      <td>Original</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>84.7330</td>
+      <td>10.1718</td>
+      <td>119.2275</td>
+      <td>1,954.9323</td>
+      <td>Winsor @ 0.990</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>1,447.0958</td>
+      <td>789.9896</td>
+      <td>3,973.3688</td>
+      <td>6,746.0332</td>
+      <td>Winsor @ 0.990</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>84.7330</td>
+      <td>10.1718</td>
+      <td>119.2275</td>
+      <td>1,954.9323</td>
+      <td>Winsor @ 0.995</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>1,465.1006</td>
+      <td>789.9896</td>
+      <td>3,973.3688</td>
+      <td>7,834.3418</td>
+      <td>Winsor @ 0.995</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>84.7330</td>
+      <td>10.1718</td>
+      <td>119.2275</td>
+      <td>1,954.9323</td>
+      <td>Trim Top 1%</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>1,322.6942</td>
+      <td>768.7731</td>
+      <td>3,738.4813</td>
+      <td>5,904.6247</td>
+      <td>Trim Top 1%</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Specification Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>variant</th>
+      <th>term_in_model</th>
+      <th>estimate</th>
+      <th>estimate_unit</th>
+      <th>coef</th>
+      <th>std_err</th>
+      <th>pvalue</th>
+      <th>nobs</th>
+      <th>sign</th>
+      <th>matches_baseline_sign</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Baseline PPML</td>
+      <td>Yes</td>
+      <td>1,767.97%</td>
+      <td>percent_effect</td>
+      <td>2.9274</td>
+      <td>0.0416</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>winsor_p99_ppml</td>
+      <td>Yes</td>
+      <td>1,756.37%</td>
+      <td>percent_effect</td>
+      <td>2.9212</td>
+      <td>0.0408</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Winsorized PPML @ p99.5</td>
+      <td>Yes</td>
+      <td>1,761.75%</td>
+      <td>percent_effect</td>
+      <td>2.9241</td>
+      <td>0.0410</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Trim Top 1% PPML</td>
+      <td>Yes</td>
+      <td>1,729.79%</td>
+      <td>percent_effect</td>
+      <td>2.9068</td>
+      <td>0.0402</td>
+      <td>0.0000</td>
+      <td>25912</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Scarcity-Excluded PPML</td>
+      <td>Yes</td>
+      <td>1,804.45%</td>
+      <td>percent_effect</td>
+      <td>2.9468</td>
+      <td>0.0407</td>
+      <td>0.0000</td>
+      <td>25868</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OLS Levels</td>
+      <td>Yes</td>
+      <td>1,185.3553</td>
+      <td>level_coefficient</td>
+      <td>1,185.3553</td>
+      <td>16.4063</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OLS log(1 + y)</td>
+      <td>Yes</td>
+      <td>4,019.69%</td>
+      <td>percent_effect</td>
+      <td>3.7184</td>
+      <td>0.0225</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Fixed-Effect Identification Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>support_check</th>
+      <th>share</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Day FE cells with both states</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Entity cells with both states</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Entity-by-day cells with both states</td>
+      <td>1.0000</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="diag-card">
+    <h2>Island Against System / Visayas vs System / Any Connected Inter-Link Congestion</h2>
+    <div class="verdict"><strong>Stable</strong>: The indicator is heavily concentrated in the extreme right tail of the outcome, so the estimate is largely tracking scarcity-like tail episodes.</div>
+    <div class="meta-grid">
+      <div><span class="meta-label">Baseline effect</span><span>11,961.42%</span></div>
+      <div><span class="meta-label">Sample</span><span>Visayas vs System</span></div>
+      <div><span class="meta-label">Outcome</span><span>|P_i,t - P_sys,t|</span></div>
+      <div><span class="meta-label">Sign matches</span><span>5 of 5 primary variants</span></div>
+    </div>
+    <h3>Support Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>state</th>
+      <th>rows</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>max</th>
+      <th>zero_share</th>
+      <th>near_zero_share</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>12730</td>
+      <td>14.1940</td>
+      <td>8.1931</td>
+      <td>30.4733</td>
+      <td>108.2816</td>
+      <td>1,969.8740</td>
+      <td>0.0362</td>
+      <td>0.1218</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>13444</td>
+      <td>3,267.9700</td>
+      <td>1,461.1736</td>
+      <td>8,837.8190</td>
+      <td>21,321.2513</td>
+      <td>99,910.5388</td>
+      <td>0.0003</td>
+      <td>0.0051</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Overlap With Other Congestion Indicators</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>other_indicator</th>
+      <th>share_when_term_0</th>
+      <th>share_when_term_1</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Equipment Congestion: Focal Island</td>
+      <td>0.0422</td>
+      <td>0.1381</td>
+    </tr>
+    <tr>
+      <td>Overload > 0: Focal Island</td>
+      <td>0.0404</td>
+      <td>0.1278</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Tail Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>tail</th>
+      <th>outcome_cutoff</th>
+      <th>tail_rows</th>
+      <th>indicator_share_in_tail</th>
+      <th>indicator_share_overall</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Top 1.0%</td>
+      <td>18,483.6284</td>
+      <td>262</td>
+      <td>1.0000</td>
+      <td>0.5136</td>
+    </tr>
+    <tr>
+      <td>Top 0.5%</td>
+      <td>21,368.0245</td>
+      <td>131</td>
+      <td>1.0000</td>
+      <td>0.5136</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Outcome After Winsorizing / Trimming</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>state</th>
+      <th>mean</th>
+      <th>median</th>
+      <th>p90</th>
+      <th>p99</th>
+      <th>variant</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>14.1940</td>
+      <td>8.1931</td>
+      <td>30.4733</td>
+      <td>108.2816</td>
+      <td>Original</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>3,267.9700</td>
+      <td>1,461.1736</td>
+      <td>8,837.8190</td>
+      <td>21,321.2513</td>
+      <td>Original</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>14.1940</td>
+      <td>8.1931</td>
+      <td>30.4733</td>
+      <td>108.2816</td>
+      <td>Winsor @ 0.990</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>3,119.0293</td>
+      <td>1,461.1736</td>
+      <td>8,837.8190</td>
+      <td>18,483.6284</td>
+      <td>Winsor @ 0.990</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>14.1940</td>
+      <td>8.1931</td>
+      <td>30.4733</td>
+      <td>108.2816</td>
+      <td>Winsor @ 0.995</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>3,159.5081</td>
+      <td>1,461.1736</td>
+      <td>8,837.8190</td>
+      <td>21,321.2513</td>
+      <td>Winsor @ 0.995</td>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>14.1940</td>
+      <td>8.1931</td>
+      <td>30.4733</td>
+      <td>108.2816</td>
+      <td>Trim Top 1%</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>2,813.6489</td>
+      <td>1,388.5314</td>
+      <td>8,321.7168</td>
+      <td>16,421.1288</td>
+      <td>Trim Top 1%</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Specification Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>variant</th>
+      <th>term_in_model</th>
+      <th>estimate</th>
+      <th>estimate_unit</th>
+      <th>coef</th>
+      <th>std_err</th>
+      <th>pvalue</th>
+      <th>nobs</th>
+      <th>sign</th>
+      <th>matches_baseline_sign</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Baseline PPML</td>
+      <td>Yes</td>
+      <td>11,961.42%</td>
+      <td>percent_effect</td>
+      <td>4.7926</td>
+      <td>0.0312</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>winsor_p99_ppml</td>
+      <td>Yes</td>
+      <td>11,877.25%</td>
+      <td>percent_effect</td>
+      <td>4.7856</td>
+      <td>0.0299</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Winsorized PPML @ p99.5</td>
+      <td>Yes</td>
+      <td>11,885.10%</td>
+      <td>percent_effect</td>
+      <td>4.7862</td>
+      <td>0.0301</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Trim Top 1% PPML</td>
+      <td>Yes</td>
+      <td>11,837.48%</td>
+      <td>percent_effect</td>
+      <td>4.7823</td>
+      <td>0.0292</td>
+      <td>0.0000</td>
+      <td>25912</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Scarcity-Excluded PPML</td>
+      <td>Yes</td>
+      <td>9,620.46%</td>
+      <td>percent_effect</td>
+      <td>4.5768</td>
+      <td>0.0274</td>
+      <td>0.0000</td>
+      <td>25509</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OLS Levels</td>
+      <td>Yes</td>
+      <td>2,435.6228</td>
+      <td>level_coefficient</td>
+      <td>2,435.6228</td>
+      <td>39.5863</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OLS log(1 + y)</td>
+      <td>Yes</td>
+      <td>7,813.63%</td>
+      <td>percent_effect</td>
+      <td>4.3712</td>
+      <td>0.0214</td>
+      <td>0.0000</td>
+      <td>26174</td>
+      <td>positive</td>
+      <td>Yes</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Fixed-Effect Identification Diagnostics</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>support_check</th>
+      <th>share</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Day FE cells with both states</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Entity cells with both states</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Entity-by-day cells with both states</td>
+      <td>1.0000</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+</body>
+</html>

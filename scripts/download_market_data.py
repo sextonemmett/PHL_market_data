@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import calendar
 import csv
+import re
 import urllib.parse
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -46,6 +47,7 @@ RTD_RAW_HEADER = (
 RTD_NORMALIZED_HEADER = RTD_RAW_HEADER[:-1]
 RTD_NUMERIC_COLUMNS = {"SCHED_MW", "LMP", "LOSS_FACTOR", "LMP_SMP", "LMP_LOSS", "LMP_CONGESTION"}
 DEFAULT_DATASETS = ("RTDREG", "MP", "RTD", "RTDCV", "RTDHS")
+TIMESTAMP_TOKEN_RE = re.compile(r"(\d{8,12})")
 
 
 @dataclass(frozen=True)
@@ -186,10 +188,19 @@ def build_daily_args(
 
 
 def latest_matching_file(root: Path, pattern: str) -> Path:
-    matches = sorted(root.glob(pattern))
+    matches = list(root.glob(pattern))
     if not matches:
         raise FileNotFoundError(f"No files matched {pattern} under {root}.")
-    return matches[-1]
+
+    def sort_key(path: Path) -> tuple[str, str, str]:
+        tokens = TIMESTAMP_TOKEN_RE.findall(path.stem)
+        if not tokens:
+            return ("", "", path.name)
+        if len(tokens) == 1:
+            return (tokens[0], tokens[0], path.name)
+        return (tokens[-1], tokens[0], path.name)
+
+    return max(matches, key=sort_key)
 
 
 def build_rtd_url(pattern: HourlyUrlPattern, current_dt: datetime) -> str:

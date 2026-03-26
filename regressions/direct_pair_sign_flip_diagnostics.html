@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Direct Pair Sign-Flip Diagnostics</title>
+  <style>
+body { font-family: Georgia, "Times New Roman", serif; margin: 32px auto; max-width: 1420px; color: #102a43; line-height: 1.55; background: #f4f1ea; }
+h1, h2, h3 { color: #0b1f33; }
+h1 { margin-bottom: 10px; }
+h2 { margin: 28px 0 12px; }
+h3 { margin: 20px 0 10px; }
+p { margin: 0 0 14px; }
+code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px; }
+.lead { font-size: 17px; color: #243b53; margin-bottom: 24px; }
+.card { background: #faf7f1; border: 1px solid #d9e2ec; border-radius: 14px; padding: 22px 24px; margin: 22px 0 28px; box-shadow: 0 10px 28px rgba(16, 42, 67, 0.08); }
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin: 0 0 16px; }
+.meta-grid div { background: #eef3f7; border-radius: 10px; padding: 10px 12px; }
+.meta-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #486581; margin-bottom: 4px; }
+.report-table { border-collapse: collapse; width: 100%; margin: 16px 0 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(16, 42, 67, 0.10); }
+.report-table th { background: #0b1f33; color: #fdfdfd; padding: 11px 12px; text-align: center; border: 1px solid #102a43; }
+.report-table td { border: 1px solid #bcccdc; padding: 9px 12px; vertical-align: top; background: #fffdf8; color: #102a43; }
+.report-table td:first-child { font-weight: 600; background: #e6ecf2; color: #0b1f33; }
+.report-table tr:nth-child(even) td:not(:first-child) { background: #eef3f7; }
+.plot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; margin-top: 14px; }
+.mini-chart { width: 100%; height: auto; background: #fffdf8; border: 1px solid #d9e2ec; border-radius: 12px; }
+.chart-title { font-size: 14px; font-weight: 700; fill: #102a43; }
+.axis-line { stroke: #7b8794; stroke-width: 1; }
+.tick-label { font-size: 11px; fill: #486581; }
+.bar-label { font-size: 11px; fill: #102a43; }
+.legend-label { font-size: 11px; fill: #102a43; }
+.notes { color: #243b53; font-size: 14px; background: #e6ecf2; border-radius: 12px; padding: 16px 18px; margin-top: 28px; }
+</style>
+</head>
+<body>
+  <h1>Direct Pair Sign-Flip Diagnostics</h1>
+  <p class="lead">This report checks why the coefficient on island-1 equipment congestion can flip sign between the non-elasticity and elasticity-style direct-pair regressions.</p>
+
+  <section class="card">
+    <div class="meta-grid">
+      <div><span class="meta-label">Source panel</span><code>data/panels/RTD_DIRECT_PAIR_PANEL_202512240005_202603242300.parquet</code></div>
+      <div><span class="meta-label">Baseline sample size</span><span>52,348 rows</span></div>
+      <div><span class="meta-label">Winsor cutoff</span><span>Top 1% gap cutoff at <code>22,280.1501</code></span></div>
+      <div><span class="meta-label">Scarcity restriction</span><span>Remove rows where either island price is at least <code>30,000</code> or at most <code>-9,000</code>; removed <code>1,623</code> rows</span></div>
+    </div>
+    <p>The baseline level and elasticity-style models match the direct-pair regression structure in the main report: pair fixed effects, day fixed effects, binary link and equipment congestion indicators, and RTDREG controls for each island and the system total.</p>
+  </section>
+
+  <section class="card">
+    <h2>Coefficient Path</h2>
+    <p>This table focuses on the coefficient for <code>equip_cong_any_1</code>, the term whose sign flips between the level and elasticity-style versions.</p>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Model</th>
+      <th>Equipment congestion island 1</th>
+      <th>p-value</th>
+      <th>Observations</th>
+      <th>R-squared</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Baseline level</td>
+      <td>172.7624<br>(110.8047)</td>
+      <td>0.1190</td>
+      <td>52348</td>
+      <td>0.3535</td>
+    </tr>
+    <tr>
+      <td>Baseline elasticity-style</td>
+      <td>-0.1003***<br>(0.0319)</td>
+      <td>0.0017</td>
+      <td>52348</td>
+      <td>0.8151</td>
+    </tr>
+    <tr>
+      <td>Winsorized level</td>
+      <td>64.6647<br>(70.7799)</td>
+      <td>0.3609</td>
+      <td>52348</td>
+      <td>0.4311</td>
+    </tr>
+    <tr>
+      <td>Winsorized elasticity-style</td>
+      <td>-0.1024***<br>(0.0317)</td>
+      <td>0.0012</td>
+      <td>52348</td>
+      <td>0.8154</td>
+    </tr>
+    <tr>
+      <td>Restricted-sample level</td>
+      <td>-96.7455*<br>(54.7384)</td>
+      <td>0.0772</td>
+      <td>50725</td>
+      <td>0.4336</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Fixed Effects Used</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Model</th>
+      <th>Unit FE</th>
+      <th>Calendar FE</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Baseline level</td>
+      <td>Pair</td>
+      <td>Day</td>
+    </tr>
+    <tr>
+      <td>Baseline elasticity-style</td>
+      <td>Pair</td>
+      <td>Day</td>
+    </tr>
+    <tr>
+      <td>Winsorized level</td>
+      <td>Pair</td>
+      <td>Day</td>
+    </tr>
+    <tr>
+      <td>Winsorized elasticity-style</td>
+      <td>Pair</td>
+      <td>Day</td>
+    </tr>
+    <tr>
+      <td>Restricted-sample level</td>
+      <td>Pair</td>
+      <td>Day</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>All Congestion Coefficients</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>model</th>
+      <th>Congestion variable</th>
+      <th>Baseline elasticity-style</th>
+      <th>Baseline level</th>
+      <th>Restricted-sample level</th>
+      <th>Winsorized elasticity-style</th>
+      <th>Winsorized level</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th></th>
+      <td>equip_cong_any_1</td>
+      <td>-0.1003***<br>(0.0319)</td>
+      <td>172.7624<br>(110.8047)</td>
+      <td>-96.7455*<br>(54.7384)</td>
+      <td>-0.1024***<br>(0.0317)</td>
+      <td>64.6647<br>(70.7799)</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>equip_cong_any_2</td>
+      <td>-0.2285***<br>(0.0357)</td>
+      <td>-761.1483***<br>(167.7347)</td>
+      <td>-949.1905***<br>(94.3402)</td>
+      <td>-0.2303***<br>(0.0351)</td>
+      <td>-773.1843***<br>(116.6749)</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>link_congested_any</td>
+      <td>6.3542***<br>(0.0204)</td>
+      <td>4,825.1861***<br>(63.8273)</td>
+      <td>3,664.9391***<br>(41.9067)</td>
+      <td>6.3472***<br>(0.0204)</td>
+      <td>4,574.8561***<br>(49.6169)</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="card">
+    <h2>Dependent Variable During Island-1 Congestion Episodes</h2>
+    <p>The summary below compares the direct-pair price gap distribution when <code>equip_cong_any_1 = 1</code> versus <code>0</code>.</p>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>island_1_congested</th>
+      <th>rows</th>
+      <th>share_of_sample</th>
+      <th>mean_gap</th>
+      <th>median_gap</th>
+      <th>std_gap</th>
+      <th>max_gap</th>
+      <th>p75_gap</th>
+      <th>p90_gap</th>
+      <th>p95_gap</th>
+      <th>p99_gap</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>48880</td>
+      <td>93.38%</td>
+      <td>1,510.4620</td>
+      <td>57.7036</td>
+      <td>4,579.1651</td>
+      <td>123,229.2055</td>
+      <td>478.7531</td>
+      <td>3,657.6532</td>
+      <td>10,411.5802</td>
+      <td>21,940.3065</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>3468</td>
+      <td>6.62%</td>
+      <td>1,618.2915</td>
+      <td>69.6136</td>
+      <td>5,208.8507</td>
+      <td>86,939.4937</td>
+      <td>548.2023</td>
+      <td>4,259.7777</td>
+      <td>9,078.9225</td>
+      <td>23,418.2637</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="card">
+    <h2>Mean And Median Gap By Congestion Indicator</h2>
+    <p>Each plot compares the mean and median direct-pair gap when the indicator is off versus on.</p>
+    <div class="plot-grid"><svg viewBox="0 0 420 220" class="mini-chart" role="img" aria-label="Gap by Link Congestion"><text x="210.0" y="18" text-anchor="middle" class="chart-title">Gap by Link Congestion</text><line x1="70" y1="180" x2="410" y2="180" class="axis-line" /><line x1="70" y1="30" x2="70" y2="180" class="axis-line" /><line x1="66" y1="180.0" x2="70" y2="180.0" class="axis-line" /><text x="62" y="184.0" text-anchor="end" class="tick-label">0</text><line x1="66" y1="105.0" x2="70" y2="105.0" class="axis-line" /><text x="62" y="109.0" text-anchor="end" class="tick-label">2,674</text><line x1="66" y1="30.0" x2="70" y2="30.0" class="axis-line" /><text x="62" y="34.0" text-anchor="end" class="tick-label">5,347</text><rect x="100" y="176.6421916962181" width="32" height="3.357808303781889" fill="#b85c38" rx="4" ry="4" /><text x="116.0" y="170.6421916962181" text-anchor="middle" class="bar-label">120</text><rect x="138" y="179.53925745299244" width="32" height="0.46074254700754996" fill="#355c7d" rx="4" ry="4" /><text x="154.0" y="173.53925745299244" text-anchor="middle" class="bar-label">16</text><text x="135" y="208" text-anchor="middle" class="tick-label">0</text><rect x="246" y="30.0" width="32" height="150.0" fill="#b85c38" rx="4" ry="4" /><text x="262.0" y="24.0" text-anchor="middle" class="bar-label">5,347</text><rect x="284" y="108.18197114135847" width="32" height="71.81802885864153" fill="#355c7d" rx="4" ry="4" /><text x="300.0" y="102.18197114135847" text-anchor="middle" class="bar-label">2,560</text><text x="281" y="208" text-anchor="middle" class="tick-label">1</text><rect x="265" y="26" width="10" height="10" fill="#b85c38" rx="2" ry="2" /><text x="281" y="35" class="legend-label">Mean</text><rect x="265" y="44" width="10" height="10" fill="#355c7d" rx="2" ry="2" /><text x="281" y="53" class="legend-label">Median</text></svg><svg viewBox="0 0 420 220" class="mini-chart" role="img" aria-label="Gap by Island 1 Equipment Congestion"><text x="210.0" y="18" text-anchor="middle" class="chart-title">Gap by Island 1 Equipment Congestion</text><line x1="70" y1="180" x2="410" y2="180" class="axis-line" /><line x1="70" y1="30" x2="70" y2="180" class="axis-line" /><line x1="66" y1="180.0" x2="70" y2="180.0" class="axis-line" /><text x="62" y="184.0" text-anchor="end" class="tick-label">0</text><line x1="66" y1="105.0" x2="70" y2="105.0" class="axis-line" /><text x="62" y="109.0" text-anchor="end" class="tick-label">809</text><line x1="66" y1="30.0" x2="70" y2="30.0" class="axis-line" /><text x="62" y="34.0" text-anchor="end" class="tick-label">1,618</text><rect x="100" y="39.99475060091186" width="32" height="140.00524939908814" fill="#b85c38" rx="4" ry="4" /><text x="116.0" y="33.99475060091186" text-anchor="middle" class="bar-label">1,510</text><rect x="138" y="174.65142856181407" width="32" height="5.3485714381859255" fill="#355c7d" rx="4" ry="4" /><text x="154.0" y="168.65142856181407" text-anchor="middle" class="bar-label">58</text><text x="135" y="208" text-anchor="middle" class="tick-label">0</text><rect x="246" y="30.0" width="32" height="150.0" fill="#b85c38" rx="4" ry="4" /><text x="262.0" y="24.0" text-anchor="middle" class="bar-label">1,618</text><rect x="284" y="173.54749114363997" width="32" height="6.452508856360014" fill="#355c7d" rx="4" ry="4" /><text x="300.0" y="167.54749114363997" text-anchor="middle" class="bar-label">70</text><text x="281" y="208" text-anchor="middle" class="tick-label">1</text><rect x="265" y="26" width="10" height="10" fill="#b85c38" rx="2" ry="2" /><text x="281" y="35" class="legend-label">Mean</text><rect x="265" y="44" width="10" height="10" fill="#355c7d" rx="2" ry="2" /><text x="281" y="53" class="legend-label">Median</text></svg><svg viewBox="0 0 420 220" class="mini-chart" role="img" aria-label="Gap by Island 2 Equipment Congestion"><text x="210.0" y="18" text-anchor="middle" class="chart-title">Gap by Island 2 Equipment Congestion</text><line x1="70" y1="180" x2="410" y2="180" class="axis-line" /><line x1="70" y1="30" x2="70" y2="180" class="axis-line" /><line x1="66" y1="180.0" x2="70" y2="180.0" class="axis-line" /><text x="62" y="184.0" text-anchor="end" class="tick-label">0</text><line x1="66" y1="105.0" x2="70" y2="105.0" class="axis-line" /><text x="62" y="109.0" text-anchor="end" class="tick-label">1,962</text><line x1="66" y1="30.0" x2="70" y2="30.0" class="axis-line" /><text x="62" y="34.0" text-anchor="end" class="tick-label">3,924</text><rect x="100" y="126.42666668635687" width="32" height="53.57333331364314" fill="#b85c38" rx="4" ry="4" /><text x="116.0" y="120.42666668635687" text-anchor="middle" class="bar-label">1,401</text><rect x="138" y="177.93093694263632" width="32" height="2.0690630573636657" fill="#355c7d" rx="4" ry="4" /><text x="154.0" y="171.93093694263632" text-anchor="middle" class="bar-label">54</text><text x="135" y="208" text-anchor="middle" class="tick-label">0</text><rect x="246" y="30.0" width="32" height="150.0" fill="#b85c38" rx="4" ry="4" /><text x="262.0" y="24.0" text-anchor="middle" class="bar-label">3,924</text><rect x="284" y="140.898371187739" width="32" height="39.10162881226099" fill="#355c7d" rx="4" ry="4" /><text x="300.0" y="134.898371187739" text-anchor="middle" class="bar-label">1,023</text><text x="281" y="208" text-anchor="middle" class="tick-label">1</text><rect x="265" y="26" width="10" height="10" fill="#b85c38" rx="2" ry="2" /><text x="281" y="35" class="legend-label">Mean</text><rect x="265" y="44" width="10" height="10" fill="#355c7d" rx="2" ry="2" /><text x="281" y="53" class="legend-label">Median</text></svg></div>
+    <h3>Underlying Values</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>indicator</th>
+      <th>state</th>
+      <th>rows</th>
+      <th>mean_gap</th>
+      <th>median_gap</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>link_congested_any</td>
+      <td>0</td>
+      <td>38349</td>
+      <td>119.6959</td>
+      <td>16.4241</td>
+    </tr>
+    <tr>
+      <td>link_congested_any</td>
+      <td>1</td>
+      <td>13999</td>
+      <td>5,347.0534</td>
+      <td>2,560.0989</td>
+    </tr>
+    <tr>
+      <td>equip_cong_any_1</td>
+      <td>0</td>
+      <td>48880</td>
+      <td>1,510.4620</td>
+      <td>57.7036</td>
+    </tr>
+    <tr>
+      <td>equip_cong_any_1</td>
+      <td>1</td>
+      <td>3468</td>
+      <td>1,618.2915</td>
+      <td>69.6136</td>
+    </tr>
+    <tr>
+      <td>equip_cong_any_2</td>
+      <td>0</td>
+      <td>49937</td>
+      <td>1,401.4295</td>
+      <td>54.1248</td>
+    </tr>
+    <tr>
+      <td>equip_cong_any_2</td>
+      <td>1</td>
+      <td>2411</td>
+      <td>3,923.8630</td>
+      <td>1,022.8629</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="card">
+    <h2>Correlation And Variance Inflation</h2>
+    <p>The correlation matrix and VIF tables check whether the sign flip is plausibly tied to multicollinearity among the congestion indicators and RTDREG totals.</p>
+    <h3>Pairwise Correlation</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>variable</th>
+      <th>link_congested_any</th>
+      <th>equip_cong_any_1</th>
+      <th>equip_cong_any_2</th>
+      <th>losses_total</th>
+      <th>generation_total</th>
+      <th>mkt_import_total</th>
+      <th>mkt_export_total</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>link_congested_any</td>
+      <td>1.0000</td>
+      <td>-0.0884</td>
+      <td>0.2502</td>
+      <td>0.2084</td>
+      <td>0.2148</td>
+      <td>0.0459</td>
+      <td>0.0459</td>
+    </tr>
+    <tr>
+      <td>equip_cong_any_1</td>
+      <td>-0.0884</td>
+      <td>1.0000</td>
+      <td>-0.0567</td>
+      <td>0.1695</td>
+      <td>0.1296</td>
+      <td>0.0772</td>
+      <td>0.0772</td>
+    </tr>
+    <tr>
+      <td>equip_cong_any_2</td>
+      <td>0.2502</td>
+      <td>-0.0567</td>
+      <td>1.0000</td>
+      <td>0.1570</td>
+      <td>0.0676</td>
+      <td>0.0941</td>
+      <td>0.0941</td>
+    </tr>
+    <tr>
+      <td>losses_total</td>
+      <td>0.2084</td>
+      <td>0.1695</td>
+      <td>0.1570</td>
+      <td>1.0000</td>
+      <td>0.8557</td>
+      <td>0.1036</td>
+      <td>0.1036</td>
+    </tr>
+    <tr>
+      <td>generation_total</td>
+      <td>0.2148</td>
+      <td>0.1296</td>
+      <td>0.0676</td>
+      <td>0.8557</td>
+      <td>1.0000</td>
+      <td>0.0586</td>
+      <td>0.0586</td>
+    </tr>
+    <tr>
+      <td>mkt_import_total</td>
+      <td>0.0459</td>
+      <td>0.0772</td>
+      <td>0.0941</td>
+      <td>0.1036</td>
+      <td>0.0586</td>
+      <td>1.0000</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>mkt_export_total</td>
+      <td>0.0459</td>
+      <td>0.0772</td>
+      <td>0.0941</td>
+      <td>0.1036</td>
+      <td>0.0586</td>
+      <td>1.0000</td>
+      <td>1.0000</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Full VIF</h3>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>variable</th>
+      <th>vif</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>link_congested_any</td>
+      <td>1.5131</td>
+    </tr>
+    <tr>
+      <td>equip_cong_any_1</td>
+      <td>1.1264</td>
+    </tr>
+    <tr>
+      <td>equip_cong_any_2</td>
+      <td>1.1664</td>
+    </tr>
+    <tr>
+      <td>losses_total</td>
+      <td>89.3679</td>
+    </tr>
+    <tr>
+      <td>generation_total</td>
+      <td>91.0500</td>
+    </tr>
+    <tr>
+      <td>mkt_import_total</td>
+      <td>21,114,021,291.1007</td>
+    </tr>
+    <tr>
+      <td>mkt_export_total</td>
+      <td>21,114,021,291.1007</td>
+    </tr>
+  </tbody>
+</table>
+    <h3>Reduced VIF Without <code>mkt_export_total</code></h3>
+    <p><code>mkt_import_total</code> and <code>mkt_export_total</code> are identical in this panel, so the reduced VIF table drops one of them to show the remaining collinearity more clearly.</p>
+    <table border="1" class="dataframe report-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>variable</th>
+      <th>vif</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>link_congested_any</td>
+      <td>1.5131</td>
+    </tr>
+    <tr>
+      <td>equip_cong_any_1</td>
+      <td>1.1263</td>
+    </tr>
+    <tr>
+      <td>equip_cong_any_2</td>
+      <td>1.1664</td>
+    </tr>
+    <tr>
+      <td>losses_total</td>
+      <td>89.3679</td>
+    </tr>
+    <tr>
+      <td>generation_total</td>
+      <td>91.0498</td>
+    </tr>
+    <tr>
+      <td>mkt_import_total</td>
+      <td>4.7900</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <div class="notes">
+    <p>The direct-pair panel contains a heavy upper tail in price gaps. The diagnostics above separate three possibilities: tail sensitivity, scarcity episodes, and multicollinearity among congestion and RTDREG totals.</p>
+    <p>Significance stars follow the main report convention: <code>* p&lt;0.10</code>, <code>** p&lt;0.05</code>, <code>*** p&lt;0.01</code>.</p>
+  </div>
+</body>
+</html>
