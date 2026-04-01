@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Luzon-Visayas Price Split OLS</title>
+  <style>
+body { font-family: Georgia, "Times New Roman", serif; margin: 32px auto; max-width: 1440px; color: #102a43; line-height: 1.55; background: #f4f1ea; }
+h1, h2 { color: #0b1f33; }
+h1 { margin-bottom: 10px; }
+h2 { margin: 0 0 14px; }
+p { margin: 0 0 14px; }
+code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px; }
+.lead { font-size: 17px; color: #243b53; margin-bottom: 24px; }
+.spec-card { background: #faf7f1; border: 1px solid #d9e2ec; border-radius: 14px; padding: 22px 24px; margin: 26px 0 32px; box-shadow: 0 10px 28px rgba(16, 42, 67, 0.08); }
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin: 0 0 16px; }
+.meta-grid div { background: #eef3f7; border-radius: 10px; padding: 10px 12px; }
+.meta-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #486581; margin-bottom: 4px; }
+.formula-box { background: #102a43; color: #fdfdfd; border-radius: 12px; padding: 14px 16px; margin: 0 0 18px; }
+.formula-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; margin-bottom: 8px; }
+.formula { font-size: 16px; line-height: 1.5; }
+.reg-table { border-collapse: collapse; width: 100%; margin: 18px 0 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(16, 42, 67, 0.10); }
+.reg-table th { background: #0b1f33; color: #fdfdfd; padding: 11px 12px; text-align: center; border: 1px solid #102a43; }
+.reg-table td { border: 1px solid #bcccdc; padding: 9px 12px; vertical-align: top; background: #fffdf8; color: #102a43; }
+.reg-table td:first-child { font-weight: 600; width: 320px; background: #e6ecf2; color: #0b1f33; }
+.reg-table tr:nth-child(even) td:not(:first-child) { background: #eef3f7; }
+.notes { color: #243b53; font-size: 14px; background: #e6ecf2; border-radius: 12px; padding: 16px 18px; margin-top: 28px; }
+</style>
+</head>
+<body>
+  <h1>Luzon-Visayas Price Split OLS Regression Table</h1>
+  <p class="lead">Four OLS specifications explain Luzon and Visayas RTD price levels separately, splitting the sample by whether the Luzon-Visayas link is congested. Each model includes day fixed effects and <code>HC1</code> robust standard errors.</p>
+
+  <section class="spec-card">
+    <h2>Specification Summary</h2>
+    <div class="meta-grid">
+      <div><span class="meta-label">Direct-pair source</span><code>data/panels/RTD_DIRECT_PAIR_PANEL_202512240005_202603242300.parquet</code></div>
+      <div><span class="meta-label">Demand source</span><code>data/rtdreg/combined/RTDREG_20251224_20260324.parquet</code></div>
+      <div><span class="meta-label">Sample</span><span>Luzon-Visayas pair only</span></div>
+      <div><span class="meta-label">Merged observations</span><span>26,174</span></div>
+      <div><span class="meta-label">Equipment congestion</span><span><code>equip_cong_any</code> indicators from the direct-pair panel</span></div>
+      <div><span class="meta-label">Demand measure</span><span><code>MKT_REQT</code> from <code>RTDREG</code> where <code>COMMODITY_TYPE == "En"</code></span></div>
+    </div>
+    <div class="formula-box">
+      <div class="formula-label">Model Formulas</div>
+      <div class="formula"><strong>Luzon price (no luz_vis link congestion)</strong>: <code>price_1 ~ own_equip_congestion + other_equip_congestion + own_demand + other_demand + C(fe_day)</code><br><strong>Luzon price (with luz_vis link congestion)</strong>: <code>price_1 ~ own_equip_congestion + other_equip_congestion + own_demand + other_demand + C(fe_day)</code><br><strong>Visayas price (no luz_vis link congestion)</strong>: <code>price_2 ~ own_equip_congestion + other_equip_congestion + own_demand + other_demand + C(fe_day)</code><br><strong>Visayas price (with luz_vis link congestion)</strong>: <code>price_2 ~ own_equip_congestion + other_equip_congestion + own_demand + other_demand + C(fe_day)</code></div>
+    </div>
+    <table border="1" class="dataframe reg-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Variable</th>
+      <th>Luzon price (no luz_vis link congestion)</th>
+      <th>Luzon price (with luz_vis link congestion)</th>
+      <th>Visayas price (no luz_vis link congestion)</th>
+      <th>Visayas price (with luz_vis link congestion)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Own island, equipment congestion</td>
+      <td>412.9017**<br>(185.4731)</td>
+      <td>1,150.0441***<br>(216.9063)</td>
+      <td>-1,377.6827***<br>(88.2846)</td>
+      <td>-2,621.0319***<br>(317.5348)</td>
+    </tr>
+    <tr>
+      <td>Other island, equipment congestion</td>
+      <td>-1,377.3342***<br>(88.2803)</td>
+      <td>-772.5975***<br>(99.4029)</td>
+      <td>413.2570**<br>(185.4634)</td>
+      <td>521.3986<br>(584.9905)</td>
+    </tr>
+    <tr>
+      <td>Own island, demand</td>
+      <td>-1.1068***<br>(0.1123)</td>
+      <td>-1.4635***<br>(0.1591)</td>
+      <td>10.1482***<br>(0.5451)</td>
+      <td>49.8152***<br>(1.4552)</td>
+    </tr>
+    <tr>
+      <td>Other island, demand</td>
+      <td>10.1347***<br>(0.5452)</td>
+      <td>8.3227***<br>(0.6631)</td>
+      <td>-1.1094***<br>(0.1123)</td>
+      <td>-7.9870***<br>(0.3499)</td>
+    </tr>
+    <tr>
+      <td>Day FE</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Observations</td>
+      <td>14,752</td>
+      <td>11,422</td>
+      <td>14,752</td>
+      <td>11,422</td>
+    </tr>
+    <tr>
+      <td>R²</td>
+      <td>0.398</td>
+      <td>0.384</td>
+      <td>0.398</td>
+      <td>0.491</td>
+    </tr>
+    <tr>
+      <td>Dependent variable</td>
+      <td>Luzon price</td>
+      <td>Luzon price</td>
+      <td>Visayas price</td>
+      <td>Visayas price</td>
+    </tr>
+    <tr>
+      <td>Subsample</td>
+      <td>No Luzon-Visayas link congestion</td>
+      <td>With Luzon-Visayas link congestion</td>
+      <td>No Luzon-Visayas link congestion</td>
+      <td>With Luzon-Visayas link congestion</td>
+    </tr>
+    <tr>
+      <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <div class="notes">
+    <p>The no-congestion columns use rows where <code>link_congested_any == 0</code>; the with-congestion columns use rows where <code>link_congested_any == 1</code>.</p>
+    <p>For Luzon-price columns, “own” refers to Luzon and “other” refers to Visayas. For Visayas-price columns, “own” refers to Visayas and “other” refers to Luzon.</p>
+    <p>Significance stars: <code>* p&lt;0.10</code>, <code>** p&lt;0.05</code>, <code>*** p&lt;0.01</code>.</p>
+    <p>Tidy coefficient export: <code>regressions/luzon_visayas_price_split_ols_coefficients.csv</code></p>
+  </div>
+</body>
+</html>

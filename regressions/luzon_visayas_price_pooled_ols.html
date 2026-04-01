@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Luzon-Visayas Price Pooled OLS</title>
+  <style>
+body { font-family: Georgia, "Times New Roman", serif; margin: 32px auto; max-width: 1440px; color: #102a43; line-height: 1.55; background: #f4f1ea; }
+h1, h2 { color: #0b1f33; }
+h1 { margin-bottom: 10px; }
+h2 { margin: 0 0 14px; }
+p { margin: 0 0 14px; }
+code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px; }
+.lead { font-size: 17px; color: #243b53; margin-bottom: 24px; }
+.spec-card { background: #faf7f1; border: 1px solid #d9e2ec; border-radius: 14px; padding: 22px 24px; margin: 26px 0 32px; box-shadow: 0 10px 28px rgba(16, 42, 67, 0.08); }
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin: 0 0 16px; }
+.meta-grid div { background: #eef3f7; border-radius: 10px; padding: 10px 12px; }
+.meta-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #486581; margin-bottom: 4px; }
+.formula-box { background: #102a43; color: #fdfdfd; border-radius: 12px; padding: 14px 16px; margin: 0 0 18px; }
+.formula-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; margin-bottom: 8px; }
+.formula { font-size: 16px; line-height: 1.5; }
+.reg-table { border-collapse: collapse; width: 100%; margin: 18px 0 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(16, 42, 67, 0.10); }
+.reg-table th { background: #0b1f33; color: #fdfdfd; padding: 11px 12px; text-align: center; border: 1px solid #102a43; }
+.reg-table td { border: 1px solid #bcccdc; padding: 9px 12px; vertical-align: top; background: #fffdf8; color: #102a43; }
+.reg-table td:first-child { font-weight: 600; width: 320px; background: #e6ecf2; color: #0b1f33; }
+.reg-table tr:nth-child(even) td:not(:first-child) { background: #eef3f7; }
+.notes { color: #243b53; font-size: 14px; background: #e6ecf2; border-radius: 12px; padding: 16px 18px; margin-top: 28px; }
+</style>
+</head>
+<body>
+  <h1>Luzon-Visayas Pooled OLS Regression Table</h1>
+  <p class="lead">These columns come from pooled models that use the full Luzon-Visayas sample and interact the key regressors with the Luzon-Visayas congestion indicator. Equipment-congestion rows report the 0-to-1 effect of the indicator. Demand rows report the implied effect of a <code>+100 MW</code> increase in <code>MKT_REQT</code>.</p>
+
+  <section class="spec-card">
+    <h2>Specification Summary</h2>
+    <div class="meta-grid">
+      <div><span class="meta-label">Direct-pair source</span><code>data/panels/RTD_DIRECT_PAIR_PANEL_202512240005_202603242300.parquet</code></div>
+      <div><span class="meta-label">Demand source</span><code>data/rtdreg/combined/RTDREG_20251224_20260324.parquet</code></div>
+      <div><span class="meta-label">Sample</span><span>Luzon-Visayas pair only</span></div>
+      <div><span class="meta-label">Merged observations</span><span>26,174</span></div>
+      <div><span class="meta-label">Equipment congestion</span><span><code>equip_cong_any</code> indicators from the direct-pair panel</span></div>
+      <div><span class="meta-label">Demand measure</span><span><code>MKT_REQT</code> from <code>RTDREG</code> where <code>COMMODITY_TYPE == "En"</code></span></div>
+    </div>
+  </section>
+
+  
+  <section class="spec-card">
+    <h2>Pooled Model With Day FE</h2>
+    <p>This version uses common day fixed effects across the full sample and reports implied coefficients for the no-congestion and with-congestion regimes.</p>
+    <div class="formula-box">
+      <div class="formula-label">Underlying Pooled Formulas</div>
+      <div class="formula"><strong>Luzon pooled model (Pooled Model With Day FE)</strong><br><em>P<sub>L,t</sub></em> = &beta;<sub>1</sub> OwnCong<sub>t</sub> + &beta;<sub>2</sub> OtherCong<sub>t</sub> + &beta;<sub>3</sub> OwnDemand<sub>t</sub> + &beta;<sub>4</sub> OtherDemand<sub>t</sub> + &gamma;<sub>0</sub> LinkCong<sub>t</sub> + &gamma;<sub>1</sub>(LinkCong<sub>t</sub> &times; OwnCong<sub>t</sub>) + &gamma;<sub>2</sub>(LinkCong<sub>t</sub> &times; OtherCong<sub>t</sub>) + &gamma;<sub>3</sub>(LinkCong<sub>t</sub> &times; OwnDemand<sub>t</sub>) + &gamma;<sub>4</sub>(LinkCong<sub>t</sub> &times; OtherDemand<sub>t</sub>) + &alpha;<sub>d</sub> + &varepsilon;<sub>t</sub><br><br><strong>Visayas pooled model (Pooled Model With Day FE)</strong><br><em>P<sub>V,t</sub></em> = &beta;<sub>1</sub> OwnCong<sub>t</sub> + &beta;<sub>2</sub> OtherCong<sub>t</sub> + &beta;<sub>3</sub> OwnDemand<sub>t</sub> + &beta;<sub>4</sub> OtherDemand<sub>t</sub> + &gamma;<sub>0</sub> LinkCong<sub>t</sub> + &gamma;<sub>1</sub>(LinkCong<sub>t</sub> &times; OwnCong<sub>t</sub>) + &gamma;<sub>2</sub>(LinkCong<sub>t</sub> &times; OtherCong<sub>t</sub>) + &gamma;<sub>3</sub>(LinkCong<sub>t</sub> &times; OwnDemand<sub>t</sub>) + &gamma;<sub>4</sub>(LinkCong<sub>t</sub> &times; OtherDemand<sub>t</sub>) + &alpha;<sub>d</sub> + &varepsilon;<sub>t</sub></div>
+    </div>
+    <table border="1" class="dataframe reg-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Variable</th>
+      <th>Luzon Price | Link Uncongested</th>
+      <th>Luzon Price | Link Congested</th>
+      <th>Visayas Price | Link Uncongested</th>
+      <th>Visayas Price | Link Congested</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Own island, equipment congestion</td>
+      <td>429.4575**<br>(191.5195)</td>
+      <td>2,299.3226***<br>(217.3239)</td>
+      <td>-2,025.7426***<br>(136.6412)</td>
+      <td>-2,247.6343***<br>(222.0159)</td>
+    </tr>
+    <tr>
+      <td>Other island, equipment congestion</td>
+      <td>-840.6679***<br>(90.7368)</td>
+      <td>-1,138.8556***<br>(74.7452)</td>
+      <td>-175.9198<br>(213.9800)</td>
+      <td>1,799.5551***<br>(446.4909)</td>
+    </tr>
+    <tr>
+      <td>Own island, demand (+100 MW)</td>
+      <td>-65.4180***<br>(8.7970)</td>
+      <td>-106.0404***<br>(9.4145)</td>
+      <td>1,941.2115***<br>(62.1028)</td>
+      <td>3,397.0858***<br>(90.6046)</td>
+    </tr>
+    <tr>
+      <td>Other island, demand (+100 MW)</td>
+      <td>708.0497***<br>(41.7495)</td>
+      <td>748.7261***<br>(42.1585)</td>
+      <td>-305.9066***<br>(14.2741)</td>
+      <td>-344.4083***<br>(19.0473)</td>
+    </tr>
+    <tr>
+      <td>Day FE</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Observations</td>
+      <td>26,174</td>
+      <td>26,174</td>
+      <td>26,174</td>
+      <td>26,174</td>
+    </tr>
+    <tr>
+      <td>R²</td>
+      <td>0.351</td>
+      <td>0.351</td>
+      <td>0.466</td>
+      <td>0.466</td>
+    </tr>
+    <tr>
+      <td>Dependent variable</td>
+      <td>Luzon price</td>
+      <td>Luzon price</td>
+      <td>Visayas price</td>
+      <td>Visayas price</td>
+    </tr>
+    <tr>
+      <td>Reported coefficient</td>
+      <td>Reported effect when the Luzon-Visayas link is uncongested</td>
+      <td>Reported effect when the Luzon-Visayas link is congested</td>
+      <td>Reported effect when the Luzon-Visayas link is uncongested</td>
+      <td>Reported effect when the Luzon-Visayas link is congested</td>
+    </tr>
+    <tr>
+      <td>Underlying pooled model</td>
+      <td>Luzon pooled model (Pooled Model With Day FE)</td>
+      <td>Luzon pooled model (Pooled Model With Day FE)</td>
+      <td>Visayas pooled model (Pooled Model With Day FE)</td>
+      <td>Visayas pooled model (Pooled Model With Day FE)</td>
+    </tr>
+    <tr>
+      <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="spec-card">
+    <h2>Pooled Model With Day FE and Split Equipment Congestion</h2>
+    <p>This version keeps common day fixed effects and separates each island&#x27;s congestion effect into congested-and-overloaded versus congested-without-overload indicators before interacting them with the Luzon-Visayas link-congestion regime.</p>
+    <div class="formula-box">
+      <div class="formula-label">Underlying Pooled Formulas</div>
+      <div class="formula"><strong>Luzon pooled model (Pooled Model With Day FE and Split Equipment Congestion)</strong><br><em>P<sub>L,t</sub></em> = &beta;<sub>1</sub> OwnCongOverload<sub>t</sub> + &beta;<sub>2</sub> OwnCongNoOverload<sub>t</sub> + &beta;<sub>3</sub> OtherCongOverload<sub>t</sub> + &beta;<sub>4</sub> OtherCongNoOverload<sub>t</sub> + &beta;<sub>5</sub> OwnDemand<sub>t</sub> + &beta;<sub>6</sub> OtherDemand<sub>t</sub> + &gamma;<sub>0</sub> LinkCong<sub>t</sub> + &gamma;<sub>1</sub>(LinkCong<sub>t</sub> &times; OwnCongOverload<sub>t</sub>) + &gamma;<sub>2</sub>(LinkCong<sub>t</sub> &times; OwnCongNoOverload<sub>t</sub>) + &gamma;<sub>3</sub>(LinkCong<sub>t</sub> &times; OtherCongOverload<sub>t</sub>) + &gamma;<sub>4</sub>(LinkCong<sub>t</sub> &times; OtherCongNoOverload<sub>t</sub>) + &gamma;<sub>5</sub>(LinkCong<sub>t</sub> &times; OwnDemand<sub>t</sub>) + &gamma;<sub>6</sub>(LinkCong<sub>t</sub> &times; OtherDemand<sub>t</sub>) + &alpha;<sub>d</sub> + &varepsilon;<sub>t</sub><br><br><strong>Visayas pooled model (Pooled Model With Day FE and Split Equipment Congestion)</strong><br><em>P<sub>V,t</sub></em> = &beta;<sub>1</sub> OwnCongOverload<sub>t</sub> + &beta;<sub>2</sub> OwnCongNoOverload<sub>t</sub> + &beta;<sub>3</sub> OtherCongOverload<sub>t</sub> + &beta;<sub>4</sub> OtherCongNoOverload<sub>t</sub> + &beta;<sub>5</sub> OwnDemand<sub>t</sub> + &beta;<sub>6</sub> OtherDemand<sub>t</sub> + &gamma;<sub>0</sub> LinkCong<sub>t</sub> + &gamma;<sub>1</sub>(LinkCong<sub>t</sub> &times; OwnCongOverload<sub>t</sub>) + &gamma;<sub>2</sub>(LinkCong<sub>t</sub> &times; OwnCongNoOverload<sub>t</sub>) + &gamma;<sub>3</sub>(LinkCong<sub>t</sub> &times; OtherCongOverload<sub>t</sub>) + &gamma;<sub>4</sub>(LinkCong<sub>t</sub> &times; OtherCongNoOverload<sub>t</sub>) + &gamma;<sub>5</sub>(LinkCong<sub>t</sub> &times; OwnDemand<sub>t</sub>) + &gamma;<sub>6</sub>(LinkCong<sub>t</sub> &times; OtherDemand<sub>t</sub>) + &alpha;<sub>d</sub> + &varepsilon;<sub>t</sub></div>
+    </div>
+    <table border="1" class="dataframe reg-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Variable</th>
+      <th>Luzon Price | Link Uncongested</th>
+      <th>Luzon Price | Link Congested</th>
+      <th>Visayas Price | Link Uncongested</th>
+      <th>Visayas Price | Link Congested</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Own island, congested and overloaded</td>
+      <td>2,819.5743<br>(1,798.1391)</td>
+      <td>250.0397<br>(901.5548)</td>
+      <td>-2,125.8953***<br>(131.5709)</td>
+      <td>-3,199.1813***<br>(171.4618)</td>
+    </tr>
+    <tr>
+      <td>Own island, congested, no overload</td>
+      <td>376.2908**<br>(188.5958)</td>
+      <td>2,324.2956***<br>(218.8073)</td>
+      <td>-3,913.2964***<br>(729.8353)</td>
+      <td>6,397.2416***<br>(1,305.6628)</td>
+    </tr>
+    <tr>
+      <td>Other island, congested and overloaded</td>
+      <td>-760.0086***<br>(88.1081)</td>
+      <td>-1,115.3085***<br>(72.9084)</td>
+      <td>2,850.1272*<br>(1,702.6123)</td>
+      <td>-771.2832<br>(2,238.8910)</td>
+    </tr>
+    <tr>
+      <td>Other island, congested, no overload</td>
+      <td>-2,272.5684***<br>(599.0897)</td>
+      <td>-1,286.0167***<br>(301.2606)</td>
+      <td>-239.5035<br>(212.3183)</td>
+      <td>1,826.9892***<br>(451.9776)</td>
+    </tr>
+    <tr>
+      <td>Own island, demand (+100 MW)</td>
+      <td>-66.3689***<br>(8.8303)</td>
+      <td>-106.8310***<br>(9.4373)</td>
+      <td>1,912.7003***<br>(61.0705)</td>
+      <td>3,355.1760***<br>(87.8173)</td>
+    </tr>
+    <tr>
+      <td>Other island, demand (+100 MW)</td>
+      <td>712.1223***<br>(41.8664)</td>
+      <td>751.6310***<br>(42.2391)</td>
+      <td>-298.6637***<br>(13.9675)</td>
+      <td>-334.6597***<br>(18.4167)</td>
+    </tr>
+    <tr>
+      <td>Day FE</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Observations</td>
+      <td>26,174</td>
+      <td>26,174</td>
+      <td>26,174</td>
+      <td>26,174</td>
+    </tr>
+    <tr>
+      <td>R²</td>
+      <td>0.352</td>
+      <td>0.352</td>
+      <td>0.476</td>
+      <td>0.476</td>
+    </tr>
+    <tr>
+      <td>Dependent variable</td>
+      <td>Luzon price</td>
+      <td>Luzon price</td>
+      <td>Visayas price</td>
+      <td>Visayas price</td>
+    </tr>
+    <tr>
+      <td>Reported coefficient</td>
+      <td>Reported effect when the Luzon-Visayas link is uncongested</td>
+      <td>Reported effect when the Luzon-Visayas link is congested</td>
+      <td>Reported effect when the Luzon-Visayas link is uncongested</td>
+      <td>Reported effect when the Luzon-Visayas link is congested</td>
+    </tr>
+    <tr>
+      <td>Underlying pooled model</td>
+      <td>Luzon pooled model (Pooled Model With Day FE and Split Equipment Congestion)</td>
+      <td>Luzon pooled model (Pooled Model With Day FE and Split Equipment Congestion)</td>
+      <td>Visayas pooled model (Pooled Model With Day FE and Split Equipment Congestion)</td>
+      <td>Visayas pooled model (Pooled Model With Day FE and Split Equipment Congestion)</td>
+    </tr>
+    <tr>
+      <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <section class="spec-card">
+    <h2>Pooled Model Without Day FE</h2>
+    <p>This version keeps the same pooled interaction structure but removes day fixed effects, so the regime-specific columns come from a pooled model without daily intercept controls.</p>
+    <div class="formula-box">
+      <div class="formula-label">Underlying Pooled Formulas</div>
+      <div class="formula"><strong>Luzon pooled model (Pooled Model Without Day FE)</strong><br><em>P<sub>L,t</sub></em> = &beta;<sub>1</sub> OwnCong<sub>t</sub> + &beta;<sub>2</sub> OtherCong<sub>t</sub> + &beta;<sub>3</sub> OwnDemand<sub>t</sub> + &beta;<sub>4</sub> OtherDemand<sub>t</sub> + &gamma;<sub>0</sub> LinkCong<sub>t</sub> + &gamma;<sub>1</sub>(LinkCong<sub>t</sub> &times; OwnCong<sub>t</sub>) + &gamma;<sub>2</sub>(LinkCong<sub>t</sub> &times; OtherCong<sub>t</sub>) + &gamma;<sub>3</sub>(LinkCong<sub>t</sub> &times; OwnDemand<sub>t</sub>) + &gamma;<sub>4</sub>(LinkCong<sub>t</sub> &times; OtherDemand<sub>t</sub>) + &varepsilon;<sub>t</sub><br><br><strong>Visayas pooled model (Pooled Model Without Day FE)</strong><br><em>P<sub>V,t</sub></em> = &beta;<sub>1</sub> OwnCong<sub>t</sub> + &beta;<sub>2</sub> OtherCong<sub>t</sub> + &beta;<sub>3</sub> OwnDemand<sub>t</sub> + &beta;<sub>4</sub> OtherDemand<sub>t</sub> + &gamma;<sub>0</sub> LinkCong<sub>t</sub> + &gamma;<sub>1</sub>(LinkCong<sub>t</sub> &times; OwnCong<sub>t</sub>) + &gamma;<sub>2</sub>(LinkCong<sub>t</sub> &times; OtherCong<sub>t</sub>) + &gamma;<sub>3</sub>(LinkCong<sub>t</sub> &times; OwnDemand<sub>t</sub>) + &gamma;<sub>4</sub>(LinkCong<sub>t</sub> &times; OtherDemand<sub>t</sub>) + &varepsilon;<sub>t</sub></div>
+    </div>
+    <table border="1" class="dataframe reg-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Variable</th>
+      <th>Luzon Price | Link Uncongested</th>
+      <th>Luzon Price | Link Congested</th>
+      <th>Visayas Price | Link Uncongested</th>
+      <th>Visayas Price | Link Congested</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Own island, equipment congestion</td>
+      <td>52.0101<br>(169.1367)</td>
+      <td>2,334.4075***<br>(212.5441)</td>
+      <td>-1,238.5710***<br>(89.5776)</td>
+      <td>-964.9457***<br>(191.6719)</td>
+    </tr>
+    <tr>
+      <td>Other island, equipment congestion</td>
+      <td>-1,237.9729***<br>(89.5618)</td>
+      <td>-1,260.2728***<br>(71.0010)</td>
+      <td>52.0905<br>(169.1296)</td>
+      <td>1,934.5468***<br>(441.1196)</td>
+    </tr>
+    <tr>
+      <td>Own island, demand (+100 MW)</td>
+      <td>77.4730***<br>(5.2062)</td>
+      <td>3.0578<br>(5.8506)</td>
+      <td>345.5707***<br>(21.7017)</td>
+      <td>2,187.7807***<br>(73.6818)</td>
+    </tr>
+    <tr>
+      <td>Other island, demand (+100 MW)</td>
+      <td>344.8133***<br>(21.6989)</td>
+      <td>387.9688***<br>(29.4563)</td>
+      <td>77.3614***<br>(5.2065)</td>
+      <td>-17.5505<br>(13.4006)</td>
+    </tr>
+    <tr>
+      <td>Day FE</td>
+      <td>No</td>
+      <td>No</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>Observations</td>
+      <td>26,174</td>
+      <td>26,174</td>
+      <td>26,174</td>
+      <td>26,174</td>
+    </tr>
+    <tr>
+      <td>R²</td>
+      <td>0.218</td>
+      <td>0.218</td>
+      <td>0.374</td>
+      <td>0.374</td>
+    </tr>
+    <tr>
+      <td>Dependent variable</td>
+      <td>Luzon price</td>
+      <td>Luzon price</td>
+      <td>Visayas price</td>
+      <td>Visayas price</td>
+    </tr>
+    <tr>
+      <td>Reported coefficient</td>
+      <td>Reported effect when the Luzon-Visayas link is uncongested</td>
+      <td>Reported effect when the Luzon-Visayas link is congested</td>
+      <td>Reported effect when the Luzon-Visayas link is uncongested</td>
+      <td>Reported effect when the Luzon-Visayas link is congested</td>
+    </tr>
+    <tr>
+      <td>Underlying pooled model</td>
+      <td>Luzon pooled model (Pooled Model Without Day FE)</td>
+      <td>Luzon pooled model (Pooled Model Without Day FE)</td>
+      <td>Visayas pooled model (Pooled Model Without Day FE)</td>
+      <td>Visayas pooled model (Pooled Model Without Day FE)</td>
+    </tr>
+    <tr>
+      <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+
+  <div class="notes">
+    <p>Both tables use pooled Luzon and Visayas regressions with interactions by <code>luz_vis_link_congestion</code>.</p>
+    <p>The no-congestion columns report baseline coefficients from the pooled model when <code>luz_vis_link_congestion = 0</code>.</p>
+    <p>The with-congestion columns report linear combinations of baseline and interaction terms when <code>luz_vis_link_congestion = 1</code>.</p>
+    <p><code>MKT_REQT</code> is treated as demand in MW, so demand coefficients are reported for a <code>+100 MW</code> change rather than a per-1-MW change.</p>
+    <p>For Luzon-price columns, “own” refers to Luzon and “other” refers to Visayas. For Visayas-price columns, “own” refers to Visayas and “other” refers to Luzon.</p>
+    <p>Significance stars: <code>* p&lt;0.10</code>, <code>** p&lt;0.05</code>, <code>*** p&lt;0.01</code>.</p>
+    <p>Tidy displayed-coefficient export: <code>regressions/luzon_visayas_price_pooled_ols_coefficients.csv</code></p>
+  </div>
+</body>
+</html>
