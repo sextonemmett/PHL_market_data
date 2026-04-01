@@ -46,7 +46,7 @@ RTD_RAW_HEADER = (
 )
 RTD_NORMALIZED_HEADER = RTD_RAW_HEADER[:-1]
 RTD_NUMERIC_COLUMNS = {"SCHED_MW", "LMP", "LOSS_FACTOR", "LMP_SMP", "LMP_LOSS", "LMP_CONGESTION"}
-DEFAULT_DATASETS = ("RTDREG", "MP", "RTD", "RTDCV", "RTDHS")
+DEFAULT_DATASETS = ("RTDREG", "MP", "MP_RESERVE", "RTD", "RTDCV", "RTDHS")
 TIMESTAMP_TOKEN_RE = re.compile(r"(\d{8,12})")
 
 
@@ -85,7 +85,7 @@ class RtdFileCheck:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Download RTDREG, MP, RTD, RTDCV, and RTDHS for a trailing window ending on --end-date, "
+            "Download RTDREG, MP, MP_RESERVE, RTD, RTDCV, and RTDHS for a trailing window ending on --end-date, "
             "write cleaned combined parquet outputs, and run MP-vs-RTD LMP_SMP verification."
         )
     )

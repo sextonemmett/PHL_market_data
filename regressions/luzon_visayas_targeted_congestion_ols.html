@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Luzon-Visayas Targeted Congestion OLS</title>
+  <style>
+body { font-family: Georgia, "Times New Roman", serif; margin: 32px auto; max-width: 1600px; color: #102a43; line-height: 1.55; background: #f4f1ea; }
+h1, h2 { color: #0b1f33; }
+h1 { margin-bottom: 10px; }
+h2 { margin: 0 0 14px; }
+p { margin: 0 0 14px; }
+code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px; }
+.lead { font-size: 17px; color: #243b53; margin-bottom: 24px; }
+.spec-card { background: #faf7f1; border: 1px solid #d9e2ec; border-radius: 14px; padding: 22px 24px; margin: 26px 0 32px; box-shadow: 0 10px 28px rgba(16, 42, 67, 0.08); }
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin: 0 0 16px; }
+.meta-grid div { background: #eef3f7; border-radius: 10px; padding: 10px 12px; }
+.meta-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #486581; margin-bottom: 4px; }
+.formula-box { background: #102a43; color: #fdfdfd; border-radius: 12px; padding: 14px 16px; margin: 0 0 18px; }
+.formula-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; margin-bottom: 8px; }
+.formula { font-size: 16px; line-height: 1.5; }
+.reg-table { border-collapse: collapse; width: 100%; margin: 18px 0 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(16, 42, 67, 0.10); }
+.reg-table th { background: #0b1f33; color: #fdfdfd; padding: 11px 12px; text-align: center; border: 1px solid #102a43; }
+.reg-table td { border: 1px solid #bcccdc; padding: 9px 12px; vertical-align: top; background: #fffdf8; color: #102a43; }
+.reg-table td:first-child { font-weight: 600; width: 220px; background: #e6ecf2; color: #0b1f33; }
+.reg-table tr:nth-child(even) td:not(:first-child) { background: #eef3f7; }
+.notes { color: #243b53; font-size: 14px; background: #e6ecf2; border-radius: 12px; padding: 16px 18px; margin-top: 28px; }
+</style>
+</head>
+<body>
+  <h1>Luzon-Visayas Targeted Congestion OLS</h1>
+  <p class="lead">This report collects five targeted HC1-robust OLS regressions on the CLUZ-CVIS direct-pair sample, covering congested-sample price levels and uncongested-sample absolute price gaps.</p>
+
+  <section class="spec-card">
+    <h2>Specification Summary</h2>
+    <div class="meta-grid">
+      <div><span class="meta-label">Direct-pair source</span><code>data/panels/RTD_DIRECT_PAIR_PANEL_202512240005_202603242300.parquet</code></div>
+      <div><span class="meta-label">Sample</span><span>Luzon-Visayas pair only</span></div>
+      <div><span class="meta-label">Merged observations</span><span>26,174</span></div>
+      <div><span class="meta-label">Outcome definitions</span><span><code>price_1</code>, <code>price_2</code>, and <code>dep_abs_price_gap = |price_1 - price_2|</code></span></div>
+      <div><span class="meta-label">Congestion indicators</span><span><code>L_equip_cong = equip_cong_any_1</code>, <code>V_equip_cong = equip_cong_any_2</code></span></div>
+      <div><span class="meta-label">Link filter</span><span><code>link_cong = link_congested_any</code></span></div>
+    </div>
+    <div class="formula-box">
+      <div class="formula-label">Model Formulas</div>
+      <div class="formula"><strong>Luzon price ~ own_equip_cong | full sample</strong>: <code>price_1 ~ L_equip_cong</code><br><strong>Luzon price ~ own_equip_cong | link_cong == 1</strong>: <code>price_1 ~ L_equip_cong</code><br><strong>Vis price ~ own_equip_cong | link_cong == 1</strong>: <code>price_2 ~ V_equip_cong</code><br><strong>Vis price ~ equip_cong_no_overload + equip_cong_w_overload | link_cong == 1</strong>: <code>price_2 ~ V_equip_cong_no_overload + V_equip_cong_w_overload</code><br><strong>abs(price diff) ~ L_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ L_equip_cong</code><br><strong>abs(price diff) ~ V_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ V_equip_cong</code><br><strong>abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ L_equip_cong + V_equip_cong</code></div>
+    </div>
+    <table border="1" class="dataframe reg-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Variable</th>
+      <th>Luzon price ~ own_equip_cong | full sample</th>
+      <th>Luzon price ~ own_equip_cong | link_cong == 1</th>
+      <th>Vis price ~ own_equip_cong | link_cong == 1</th>
+      <th>Vis price ~ equip_cong_no_overload + equip_cong_w_overload | link_cong == 1</th>
+      <th>abs(price diff) ~ L_equip_cong | link_cong == 0</th>
+      <th>abs(price diff) ~ V_equip_cong | link_cong == 0</th>
+      <th>abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 0</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Constant</td>
+      <td>3,228.9497***<br>(19.5248)</td>
+      <td>2,972.3981***<br>(28.2227)</td>
+      <td>7,094.5252***<br>(90.5624)</td>
+      <td>7,094.5252***<br>(90.5664)</td>
+      <td>0.3999<br>(0.2827)</td>
+      <td>0.4150<br>(0.2794)</td>
+      <td>0.4159<br>(0.2941)</td>
+    </tr>
+    <tr>
+      <td>L_equip_cong</td>
+      <td>2,158.8495***<br>(143.4519)</td>
+      <td>3,411.0025***<br>(222.1632)</td>
+      <td></td>
+      <td></td>
+      <td>-0.0018<br>(0.4881)</td>
+      <td></td>
+      <td>-0.0173<br>(0.4945)</td>
+    </tr>
+    <tr>
+      <td>V_equip_cong</td>
+      <td></td>
+      <td></td>
+      <td>149.0180<br>(211.6589)</td>
+      <td></td>
+      <td></td>
+      <td>-0.4150<br>(0.2794)</td>
+      <td>-0.4159<br>(0.2935)</td>
+    </tr>
+    <tr>
+      <td>V_equip_cong_no_overload</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>8,469.7098***<br>(1,576.9287)</td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>V_equip_cong_w_overload</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>-510.4308***<br>(178.3676)</td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Observations</td>
+      <td>26,174</td>
+      <td>11,422</td>
+      <td>11,422</td>
+      <td>11,422</td>
+      <td>14,752</td>
+      <td>14,752</td>
+      <td>14,752</td>
+    </tr>
+    <tr>
+      <td>R²</td>
+      <td>0.018</td>
+      <td>0.034</td>
+      <td>0.000</td>
+      <td>0.012</td>
+      <td>0.000</td>
+      <td>0.000</td>
+      <td>0.000</td>
+    </tr>
+    <tr>
+      <td>Dependent variable</td>
+      <td>Luzon price</td>
+      <td>Luzon price</td>
+      <td>Visayas price</td>
+      <td>Visayas price</td>
+      <td>|Luzon price - Visayas price|</td>
+      <td>|Luzon price - Visayas price|</td>
+      <td>|Luzon price - Visayas price|</td>
+    </tr>
+    <tr>
+      <td>Sample filter</td>
+      <td>full sample</td>
+      <td>link_cong == 1</td>
+      <td>link_cong == 1</td>
+      <td>link_cong == 1</td>
+      <td>link_cong == 0</td>
+      <td>link_cong == 0</td>
+      <td>link_cong == 0</td>
+    </tr>
+    <tr>
+      <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
+    </tr>
+  </tbody>
+</table>
+  </section>
+
+  <div class="notes">
+    <p>The first Luzon-price regression uses the full CLUZ-CVIS sample.</p>
+    <p>The next two price-level regressions use the congested subsample where <code>link_cong == 1</code>.</p>
+    <p>The three absolute-gap regressions use the uncongested subsample where <code>link_cong == 0</code>.</p>
+    <p>For the CLUZ-CVIS pair, <code>L_equip_cong</code> maps to Luzon equipment congestion and <code>V_equip_cong</code> maps to Visayas equipment congestion.</p>
+    <p>Significance stars: <code>* p&lt;0.10</code>, <code>** p&lt;0.05</code>, <code>*** p&lt;0.01</code>.</p>
+    <p>Tidy coefficient export: <code>regressions/luzon_visayas_targeted_congestion_ols_coefficients.csv</code></p>
+  </div>
+</body>
+</html>

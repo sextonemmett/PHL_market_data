@@ -1,9 +1,13 @@
 # Repo Summary
 
-This repo currently focuses on downloading, validating, combining, and analyzing two IEMOP RTD datasets:
+This repo currently focuses on downloading, validating, combining, and analyzing RTD market datasets from IEMOP, including:
 
 - `MP`: RTD market clearing price
 - `MP_RESERVE`: RTD reserve market clearing price
+- `RTD`: RTD prices and schedules
+- `RTDREG`: RTD regional summaries
+- `RTDCV`: RTD congestions manifesting
+- `RTDHS`: RTD HVDC schedules
 
 The main pipeline is:
 
@@ -14,12 +18,11 @@ The main pipeline is:
 
 ## Download + Combine
 
-The two downloader scripts are:
+The main downloader is:
 
-- [`scripts/download_mp.py`](/Users/emmett/Desktop/Github/PHL_market_data/scripts/download_mp.py)
-- [`scripts/download_mp_reserve.py`](/Users/emmett/Desktop/Github/PHL_market_data/scripts/download_mp_reserve.py)
+- [`scripts/download_market_data.py`](/Users/emmett/Desktop/Github/PHL_market_data/scripts/download_market_data.py)
 
-Both scripts:
+It:
 
 - accept either start/end URLs or explicit date ranges
 - generate all in-between daily IEMOP download URLs
@@ -41,8 +44,7 @@ Current QC manifests:
 Typical rerun commands:
 
 ```bash
-/opt/homebrew/bin/uv run python scripts/download_mp.py
-/opt/homebrew/bin/uv run python scripts/download_mp_reserve.py
+/opt/homebrew/bin/uv run python scripts/download_market_data.py --datasets MP MP_RESERVE
 ```
 
 ## Combined DataFrame Structure

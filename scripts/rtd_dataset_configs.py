@@ -35,6 +35,38 @@ MP_CONFIG = DatasetConfig(
     ),
 )
 
+MP_RESERVE_CONFIG = DatasetConfig(
+    dataset_code="MP_RESERVE",
+    description="RTD reserve market clearing price",
+    page_url="https://www.iemop.ph/market-data/rtd-reserve-market-clearing-price/",
+    md_file_prefix="/var/www/html/wp-content/uploads/downloads/data/MPRESERVE/MP_RESERVE_",
+    output_root="data/mp_reserve",
+    raw_filename_prefix="MP_RESERVE",
+    qc_manifest_prefix="mp_reserve_qc",
+    combined_filename_prefix="MP_RESERVE",
+    raw_header=(
+        "RUN_TIME",
+        "MKT_TYPE",
+        "TIME_INTERVAL",
+        "REGION_NAME",
+        "RESOURCE_NAME",
+        "RESOURCE_TYPE",
+        "COMMODITY_TYPE",
+        "MARGINAL_PRICE",
+        "",
+    ),
+    timestamp_columns=("RUN_TIME", "TIME_INTERVAL"),
+    numeric_columns=("MARGINAL_PRICE",),
+    interval_expectation=IntervalExpectation(
+        interval_column="TIME_INTERVAL",
+        expected_count=288,
+        required_values_by_column={
+            "REGION_NAME": ("CLUZ", "CVIS", "CMIN"),
+            "COMMODITY_TYPE": ("Dr", "Fr", "Rd", "Ru"),
+        },
+    ),
+)
+
 RTDCV_CONFIG = DatasetConfig(
     dataset_code="RTDCV",
     description="RTD congestions manifesting",
@@ -140,6 +172,7 @@ DATASET_CONFIGS = {
     config.dataset_code: config
     for config in (
         MP_CONFIG,
+        MP_RESERVE_CONFIG,
         RTDCV_CONFIG,
         RTDHS_CONFIG,
         RTDREG_CONFIG,

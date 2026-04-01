@@ -6,7 +6,6 @@ import html
 from pathlib import Path
 import re
 
-import numpy as np
 import pandas as pd
 import statsmodels.formula.api as smf
 
@@ -27,13 +26,19 @@ SPLIT_VARIABLE_SPECS = [
     {"key": "own_demand", "label": "Own island, demand (+100 MW)", "reporting_delta": 100.0},
     {"key": "other_demand", "label": "Other island, demand (+100 MW)", "reporting_delta": 100.0},
 ]
+SPLIT_NO_DEMAND_VARIABLE_SPECS = [
+    {"key": "own_congested_overloaded", "label": "Own island, congested and overloaded", "reporting_delta": 1.0},
+    {"key": "own_congested_no_overload", "label": "Own island, congested, no overload", "reporting_delta": 1.0},
+    {"key": "other_congested_overloaded", "label": "Other island, congested and overloaded", "reporting_delta": 1.0},
+    {"key": "other_congested_no_overload", "label": "Other island, congested, no overload", "reporting_delta": 1.0},
+]
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Fit pooled day-FE OLS models for Luzon and Visayas prices with interactions "
-            "for the Luzon-Visayas congestion regime, then write an HTML table."
+            "Fit separate-panel OLS models for the four Luzon/Visayas price columns "
+            "across three specifications, then write HTML regression tables."
         )
     )
     parser.add_argument("--direct-pair-panel", help="Direct-pair panel parquet path.")
@@ -123,9 +128,9 @@ def pretty_column_title(dependent_variable: str, congested: bool) -> str:
     return f"{dependent_variable} Price | {regime}"
 
 
-def pooled_rhs(include_day_fe: bool, variable_keys: list[str]) -> str:
-    interaction_block = "luz_vis_link_congestion * (" + " + ".join(variable_keys) + ")"
-    return f"C(fe_day) + {interaction_block}" if include_day_fe else interaction_block
+def section_rhs(include_day_fe: bool, variable_keys: list[str]) -> str:
+    rhs = " + ".join(variable_keys)
+    return f"{rhs} + C(fe_day)" if include_day_fe else rhs
 
 
 def prepare_model_frame(frame: pd.DataFrame, perspective: str, split_equipment_terms: bool) -> pd.DataFrame:
@@ -135,15 +140,15 @@ def prepare_model_frame(frame: pd.DataFrame, perspective: str, split_equipment_t
         own_overload = "equip_overload_any_1"
         other_cong = "equip_cong_any_2"
         other_overload = "equip_overload_any_2"
-        own_demand = "Luzon_demand"
-        other_demand = "Visayas_demand"
+        own_demand_col = "Luzon_demand"
+        other_demand_col = "Visayas_demand"
     else:
         own_cong = "equip_cong_any_2"
         own_overload = "equip_overload_any_2"
         other_cong = "equip_cong_any_1"
         other_overload = "equip_overload_any_1"
-        own_demand = "Visayas_demand"
-        other_demand = "Luzon_demand"
+        own_demand_col = "Visayas_demand"
+        other_demand_col = "Luzon_demand"
 
     if split_equipment_terms:
         model_frame["own_congested_overloaded"] = (
@@ -162,8 +167,8 @@ def prepare_model_frame(frame: pd.DataFrame, perspective: str, split_equipment_t
         model_frame["own_equip_congestion"] = model_frame[own_cong]
         model_frame["other_equip_congestion"] = model_frame[other_cong]
 
-    model_frame["own_demand"] = model_frame[own_demand]
-    model_frame["other_demand"] = model_frame[other_demand]
+    model_frame["own_demand"] = model_frame[own_demand_col]
+    model_frame["other_demand"] = model_frame[other_demand_col]
     return model_frame
 
 
@@ -176,25 +181,46 @@ def fit_models(
     split_equipment_terms: bool,
 ) -> list[dict[str, object]]:
     variable_keys = [str(spec["key"]) for spec in variable_specs]
-    rhs = pooled_rhs(include_day_fe, variable_keys)
+    rhs = section_rhs(include_day_fe, variable_keys)
     model_specs = [
         {
-            "model_key": "luzon_price",
-            "pooled_label": f"Luzon pooled model ({section_title})",
+            "title": pretty_column_title("Luzon", congested=False),
             "dep_var": "price_1",
             "perspective": "luzon",
+            "subsample_value": 0,
+            "subsample_label": "Link uncongested",
+            "dependent_variable": "Luzon price",
         },
         {
-            "model_key": "visayas_price",
-            "pooled_label": f"Visayas pooled model ({section_title})",
+            "title": pretty_column_title("Luzon", congested=True),
+            "dep_var": "price_1",
+            "perspective": "luzon",
+            "subsample_value": 1,
+            "subsample_label": "Link congested",
+            "dependent_variable": "Luzon price",
+        },
+        {
+            "title": pretty_column_title("Visayas", congested=False),
             "dep_var": "price_2",
             "perspective": "visayas",
+            "subsample_value": 0,
+            "subsample_label": "Link uncongested",
+            "dependent_variable": "Visayas price",
+        },
+        {
+            "title": pretty_column_title("Visayas", congested=True),
+            "dep_var": "price_2",
+            "perspective": "visayas",
+            "subsample_value": 1,
+            "subsample_label": "Link congested",
+            "dependent_variable": "Visayas price",
         },
     ]
 
     fitted: list[dict[str, object]] = []
     for spec in model_specs:
-        model_frame = prepare_model_frame(frame, perspective=str(spec["perspective"]), split_equipment_terms=split_equipment_terms)
+        sample = frame.loc[frame["luz_vis_link_congestion"] == spec["subsample_value"]].copy()
+        model_frame = prepare_model_frame(sample, perspective=str(spec["perspective"]), split_equipment_terms=split_equipment_terms)
         formula = f"{spec['dep_var']} ~ {rhs}"
         result = smf.ols(formula=formula, data=model_frame).fit(cov_type="HC1")
         fitted.append(
@@ -212,148 +238,62 @@ def fit_models(
     return fitted
 
 
-def linear_combo_stats(result: object, terms: list[str]) -> tuple[float, float, float]:
-    exog_names = list(result.params.index)
-    weights = np.zeros(len(exog_names))
-    for term in terms:
-        if term not in result.params.index:
-            raise KeyError(f"Missing term {term} in fitted model.")
-        weights[exog_names.index(term)] += 1.0
-    test = result.t_test(weights)
-    effect = float(np.squeeze(test.effect))
-    std_err = float(np.squeeze(test.sd))
-    pvalue = float(np.squeeze(test.pvalue))
-    return effect, std_err, pvalue
+def format_cell(result: object, term: str, reporting_delta: float) -> str:
+    if term not in result.params.index:
+        return ""
+    coef = float(result.params[term]) * reporting_delta
+    std_err = float(result.bse[term]) * reporting_delta
+    pvalue = float(result.pvalues[term])
+    return f"{format_number(coef)}{significance_stars(pvalue)}<br>({format_number(std_err)})"
 
 
-def interaction_term_name(base_term: str) -> str:
-    return f"luz_vis_link_congestion:{base_term}"
-
-
-def format_linear_combo_cell(result: object, terms: list[str], reporting_delta: float) -> str:
-    effect, std_err, pvalue = linear_combo_stats(result, terms)
-    return (
-        f"{format_number(effect * reporting_delta)}{significance_stars(pvalue)}"
-        f"<br>({format_number(std_err * reporting_delta)})"
-    )
-
-
-def build_display_specs(models: list[dict[str, object]], variable_specs: list[dict[str, object]]) -> list[dict[str, object]]:
-    by_key = {model["model_key"]: model for model in models}
-    return [
-        {
-            "title": pretty_column_title("Luzon", congested=False),
-            "pooled_label": by_key["luzon_price"]["pooled_label"],
-            "result": by_key["luzon_price"]["result"],
-            "display_terms": {
-                str(spec["key"]): [str(spec["key"])] for spec in variable_specs
-            },
-            "column_interpretation": "Reported effect when the Luzon-Visayas link is uncongested",
-            "dependent_variable": "Luzon price",
-            "formula": by_key["luzon_price"]["formula"],
-            "section_key": by_key["luzon_price"]["section_key"],
-            "section_title": by_key["luzon_price"]["section_title"],
-            "include_day_fe": by_key["luzon_price"]["include_day_fe"],
-            "variable_specs": variable_specs,
-        },
-        {
-            "title": pretty_column_title("Luzon", congested=True),
-            "pooled_label": by_key["luzon_price"]["pooled_label"],
-            "result": by_key["luzon_price"]["result"],
-            "display_terms": {
-                str(spec["key"]): [str(spec["key"]), interaction_term_name(str(spec["key"]))] for spec in variable_specs
-            },
-            "column_interpretation": "Reported effect when the Luzon-Visayas link is congested",
-            "dependent_variable": "Luzon price",
-            "formula": by_key["luzon_price"]["formula"],
-            "section_key": by_key["luzon_price"]["section_key"],
-            "section_title": by_key["luzon_price"]["section_title"],
-            "include_day_fe": by_key["luzon_price"]["include_day_fe"],
-            "variable_specs": variable_specs,
-        },
-        {
-            "title": pretty_column_title("Visayas", congested=False),
-            "pooled_label": by_key["visayas_price"]["pooled_label"],
-            "result": by_key["visayas_price"]["result"],
-            "display_terms": {
-                str(spec["key"]): [str(spec["key"])] for spec in variable_specs
-            },
-            "column_interpretation": "Reported effect when the Luzon-Visayas link is uncongested",
-            "dependent_variable": "Visayas price",
-            "formula": by_key["visayas_price"]["formula"],
-            "section_key": by_key["visayas_price"]["section_key"],
-            "section_title": by_key["visayas_price"]["section_title"],
-            "include_day_fe": by_key["visayas_price"]["include_day_fe"],
-            "variable_specs": variable_specs,
-        },
-        {
-            "title": pretty_column_title("Visayas", congested=True),
-            "pooled_label": by_key["visayas_price"]["pooled_label"],
-            "result": by_key["visayas_price"]["result"],
-            "display_terms": {
-                str(spec["key"]): [str(spec["key"]), interaction_term_name(str(spec["key"]))] for spec in variable_specs
-            },
-            "column_interpretation": "Reported effect when the Luzon-Visayas link is congested",
-            "dependent_variable": "Visayas price",
-            "formula": by_key["visayas_price"]["formula"],
-            "section_key": by_key["visayas_price"]["section_key"],
-            "section_title": by_key["visayas_price"]["section_title"],
-            "include_day_fe": by_key["visayas_price"]["include_day_fe"],
-            "variable_specs": variable_specs,
-        },
-    ]
-
-
-def build_table(display_specs: list[dict[str, object]]) -> pd.DataFrame:
-    headers = ["Variable", *[str(spec["title"]) for spec in display_specs]]
-    variable_specs = display_specs[0]["variable_specs"]
-
+def build_table(models: list[dict[str, object]], variable_specs: list[dict[str, object]]) -> pd.DataFrame:
+    headers = ["Variable", *[str(model["title"]) for model in models]]
     rows: list[dict[str, str]] = []
+
     for variable_spec in variable_specs:
         key = str(variable_spec["key"])
         row = {"Variable": str(variable_spec["label"])}
-        for spec in display_specs:
-            row[str(spec["title"])] = format_linear_combo_cell(
-                spec["result"],
-                spec["display_terms"][key],
-                float(variable_spec["reporting_delta"]),
-            )
+        for model in models:
+            row[str(model["title"])] = format_cell(model["result"], key, float(variable_spec["reporting_delta"]))
         rows.append(row)
 
     stats_rows = [
-        ("Day FE", lambda spec: "Yes" if spec["include_day_fe"] else "No"),
-        ("Observations", lambda spec: f"{int(spec['result'].nobs):,}"),
-        ("R²", lambda spec: format_number(float(spec["result"].rsquared), 3)),
-        ("Dependent variable", lambda spec: str(spec["dependent_variable"])),
-        ("Reported coefficient", lambda spec: str(spec["column_interpretation"])),
-        ("Underlying pooled model", lambda spec: str(spec["pooled_label"])),
-        ("Robust SE", lambda spec: "HC1"),
+        ("Day FE", lambda model: "Yes" if model["include_day_fe"] else "No"),
+        ("Observations", lambda model: f"{int(model['result'].nobs):,}"),
+        ("R²", lambda model: format_number(float(model["result"].rsquared), 3)),
+        ("Dependent variable", lambda model: str(model["dependent_variable"])),
+        ("Subsample", lambda model: str(model["subsample_label"])),
+        ("Estimation", lambda model: "Separate panel OLS"),
+        ("Robust SE", lambda model: "HC1"),
     ]
     for label, value_fn in stats_rows:
         row = {"Variable": label}
-        for spec in display_specs:
-            row[str(spec["title"])] = value_fn(spec)
+        for model in models:
+            row[str(model["title"])] = value_fn(model)
         rows.append(row)
 
     return pd.DataFrame(rows, columns=headers)
 
 
-def build_tidy_rows(display_specs: list[dict[str, object]]) -> pd.DataFrame:
+def build_tidy_rows(models: list[dict[str, object]], variable_specs: list[dict[str, object]]) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
-    variable_specs = display_specs[0]["variable_specs"]
-    for spec in display_specs:
-        result = spec["result"]
+    for model in models:
+        result = model["result"]
         for variable_spec in variable_specs:
             key = str(variable_spec["key"])
-            display_label = str(variable_spec["label"])
-            estimate, std_err, pvalue = linear_combo_stats(result, spec["display_terms"][key])
+            if key not in result.params.index:
+                continue
             reporting_delta = float(variable_spec["reporting_delta"])
+            estimate = float(result.params[key])
+            std_err = float(result.bse[key])
+            pvalue = float(result.pvalues[key])
             rows.append(
                 {
-                    "column_title": spec["title"],
-                    "underlying_pooled_model": spec["pooled_label"],
-                    "formula": spec["formula"],
-                    "display_term": display_label,
+                    "column_title": model["title"],
+                    "formula": model["formula"],
+                    "display_term": str(variable_spec["label"]),
+                    "term": key,
                     "estimate": estimate,
                     "std_err": std_err,
                     "pvalue": pvalue,
@@ -363,11 +303,13 @@ def build_tidy_rows(display_specs: list[dict[str, object]]) -> pd.DataFrame:
                     "nobs": int(result.nobs),
                     "r_squared": float(result.rsquared),
                     "adj_r_squared": float(result.rsquared_adj),
-                    "dependent_variable": spec["dependent_variable"],
-                    "column_interpretation": spec["column_interpretation"],
-                    "section_key": spec["section_key"],
-                    "section_title": spec["section_title"],
-                    "day_fe": bool(spec["include_day_fe"]),
+                    "dependent_variable": model["dependent_variable"],
+                    "subsample_label": model["subsample_label"],
+                    "estimation": "separate_panel",
+                    "section_key": model["section_key"],
+                    "section_title": model["section_title"],
+                    "day_fe": bool(model["include_day_fe"]),
+                    "split_equipment_terms": bool(model["split_equipment_terms"]),
                 }
             )
     return pd.DataFrame(rows)
@@ -377,46 +319,38 @@ def dataframe_to_html_table(frame: pd.DataFrame) -> str:
     return frame.to_html(index=False, escape=False, classes=["reg-table"])
 
 
-def polished_formula_html(dependent_variable: str, include_day_fe: bool, split_equipment_terms: bool) -> str:
+def polished_term_html(variable_key: str) -> str:
+    mapping = {
+        "own_equip_congestion": "OwnCong<sub>t</sub>",
+        "other_equip_congestion": "OtherCong<sub>t</sub>",
+        "own_congested_overloaded": "OwnCongOverload<sub>t</sub>",
+        "own_congested_no_overload": "OwnCongNoOverload<sub>t</sub>",
+        "other_congested_overloaded": "OtherCongOverload<sub>t</sub>",
+        "other_congested_no_overload": "OtherCongNoOverload<sub>t</sub>",
+        "own_demand": "OwnDemand<sub>t</sub>",
+        "other_demand": "OtherDemand<sub>t</sub>",
+    }
+    if variable_key not in mapping:
+        raise KeyError(f"Unsupported display variable key: {variable_key}")
+    return mapping[variable_key]
+
+
+def polished_formula_html(
+    dependent_variable: str,
+    include_day_fe: bool,
+    variable_keys: list[str],
+    subsample_label: str,
+) -> str:
     outcome = "P<sub>L,t</sub>" if dependent_variable == "price_1" else "P<sub>V,t</sub>"
+    sample_condition = "LinkCong<sub>t</sub> = 1" if subsample_label == "Link congested" else "LinkCong<sub>t</sub> = 0"
     day_fe_term = " + &alpha;<sub>d</sub>" if include_day_fe else ""
-    if split_equipment_terms:
-        main_terms = (
-            "&beta;<sub>1</sub> OwnCongOverload<sub>t</sub> + "
-            "&beta;<sub>2</sub> OwnCongNoOverload<sub>t</sub> + "
-            "&beta;<sub>3</sub> OtherCongOverload<sub>t</sub> + "
-            "&beta;<sub>4</sub> OtherCongNoOverload<sub>t</sub> + "
-            "&beta;<sub>5</sub> OwnDemand<sub>t</sub> + "
-            "&beta;<sub>6</sub> OtherDemand<sub>t</sub>"
-        )
-        interaction_terms = (
-            "&gamma;<sub>0</sub> LinkCong<sub>t</sub> + "
-            "&gamma;<sub>1</sub>(LinkCong<sub>t</sub> &times; OwnCongOverload<sub>t</sub>) + "
-            "&gamma;<sub>2</sub>(LinkCong<sub>t</sub> &times; OwnCongNoOverload<sub>t</sub>) + "
-            "&gamma;<sub>3</sub>(LinkCong<sub>t</sub> &times; OtherCongOverload<sub>t</sub>) + "
-            "&gamma;<sub>4</sub>(LinkCong<sub>t</sub> &times; OtherCongNoOverload<sub>t</sub>) + "
-            "&gamma;<sub>5</sub>(LinkCong<sub>t</sub> &times; OwnDemand<sub>t</sub>) + "
-            "&gamma;<sub>6</sub>(LinkCong<sub>t</sub> &times; OtherDemand<sub>t</sub>)"
-        )
-    else:
-        main_terms = (
-            "&beta;<sub>1</sub> OwnCong<sub>t</sub> + "
-            "&beta;<sub>2</sub> OtherCong<sub>t</sub> + "
-            "&beta;<sub>3</sub> OwnDemand<sub>t</sub> + "
-            "&beta;<sub>4</sub> OtherDemand<sub>t</sub>"
-        )
-        interaction_terms = (
-            "&gamma;<sub>0</sub> LinkCong<sub>t</sub> + "
-            "&gamma;<sub>1</sub>(LinkCong<sub>t</sub> &times; OwnCong<sub>t</sub>) + "
-            "&gamma;<sub>2</sub>(LinkCong<sub>t</sub> &times; OtherCong<sub>t</sub>) + "
-            "&gamma;<sub>3</sub>(LinkCong<sub>t</sub> &times; OwnDemand<sub>t</sub>) + "
-            "&gamma;<sub>4</sub>(LinkCong<sub>t</sub> &times; OtherDemand<sub>t</sub>)"
-        )
+    main_terms = " + ".join(
+        f"&beta;<sub>{index}</sub> {polished_term_html(variable_key)}"
+        for index, variable_key in enumerate(variable_keys, start=1)
+    )
     return (
-        f"<em>{outcome}</em> = "
-        f"{main_terms} + "
-        f"{interaction_terms}"
-        f"{day_fe_term} + &varepsilon;<sub>t</sub>"
+        f"<strong>Estimated on subsample:</strong> {sample_condition}<br>"
+        f"<em>{outcome}</em> = {main_terms}{day_fe_term} + &varepsilon;<sub>t</sub>"
     )
 
 
@@ -431,7 +365,7 @@ def render_section(
     <h2>{html.escape(title)}</h2>
     <p>{html.escape(description)}</p>
     <div class="formula-box">
-      <div class="formula-label">Underlying Pooled Formulas</div>
+      <div class="formula-label">Separate Panel Formulas</div>
       <div class="formula">{formulas_html}</div>
     </div>
     {dataframe_to_html_table(table)}
@@ -473,8 +407,8 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
         formulas_html = "<br><br>".join(
             [
                 (
-                    f"<strong>{html.escape(model['pooled_label'])}</strong><br>"
-                    f"{polished_formula_html(str(model['dep_var']), bool(model['include_day_fe']), bool(model['split_equipment_terms']))}"
+                    f"<strong>{html.escape(str(model['title']))}</strong><br>"
+                    f"{polished_formula_html(str(model['dep_var']), bool(model['include_day_fe']), [str(spec['key']) for spec in model['variable_specs']], str(model['subsample_label']))}"
                 )
                 for model in section["models"]
             ]
@@ -491,12 +425,12 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Luzon-Visayas Price Pooled OLS</title>
+  <title>Luzon-Visayas Price OLS Tables</title>
   <style>{css}</style>
 </head>
 <body>
-  <h1>Luzon-Visayas Pooled OLS Regression Table</h1>
-  <p class="lead">These columns come from pooled models that use the full Luzon-Visayas sample and interact the key regressors with the Luzon-Visayas congestion indicator. Equipment-congestion rows report the 0-to-1 effect of the indicator. Demand rows report the implied effect of a <code>+100 MW</code> increase in <code>MKT_REQT</code>.</p>
+  <h1>Luzon-Visayas Separate-Panel OLS Regression Tables</h1>
+  <p class="lead">This report keeps the same four displayed columns as the old pooled output, but each column is now estimated from its own Luzon-Visayas subsample instead of being recovered from pooled interaction terms. Equipment-congestion rows report the 0-to-1 effect of the indicator. In specifications that include demand controls, demand rows report the implied effect of a <code>+100 MW</code> increase in <code>MKT_REQT</code>.</p>
 
   <section class="spec-card">
     <h2>Specification Summary</h2>
@@ -513,9 +447,8 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
   {''.join(section_html)}
 
   <div class="notes">
-    <p>Both tables use pooled Luzon and Visayas regressions with interactions by <code>luz_vis_link_congestion</code>.</p>
-    <p>The no-congestion columns report baseline coefficients from the pooled model when <code>luz_vis_link_congestion = 0</code>.</p>
-    <p>The with-congestion columns report linear combinations of baseline and interaction terms when <code>luz_vis_link_congestion = 1</code>.</p>
+    <p>Each displayed column is estimated from a separate regression fitted only on its matching Luzon-Visayas congestion regime.</p>
+    <p>The uncongested columns use rows where <code>luz_vis_link_congestion = 0</code>; the congested columns use rows where <code>luz_vis_link_congestion = 1</code>.</p>
     <p><code>MKT_REQT</code> is treated as demand in MW, so demand coefficients are reported for a <code>+100 MW</code> change rather than a per-1-MW change.</p>
     <p>For Luzon-price columns, “own” refers to Luzon and “other” refers to Visayas. For Visayas-price columns, “own” refers to Visayas and “other” refers to Luzon.</p>
     <p>Significance stars: <code>* p&lt;0.10</code>, <code>** p&lt;0.05</code>, <code>*** p&lt;0.01</code>.</p>
@@ -540,52 +473,74 @@ def main() -> None:
     output_csv = Path(args.output_csv)
 
     frame = build_analysis_frame(panel_path, regional_path)
+    section_specs = [
+        {
+            "key": "with_day_fe",
+            "title": "Separate Panels With Day FE",
+            "description": (
+                "This version estimates the four displayed columns as separate panel regressions, "
+                "using day fixed effects within each congestion regime."
+            ),
+            "include_day_fe": True,
+            "variable_specs": BASE_VARIABLE_SPECS,
+            "split_equipment_terms": False,
+        },
+        {
+            "key": "with_day_fe_split_equipment",
+            "title": "Separate Panels With Day FE and Split Equipment Congestion",
+            "description": (
+                "This version still estimates the four columns separately, but splits each island's "
+                "equipment effect into congested-and-overloaded versus congested-without-overload indicators."
+            ),
+            "include_day_fe": True,
+            "variable_specs": SPLIT_VARIABLE_SPECS,
+            "split_equipment_terms": True,
+        },
+        {
+            "key": "with_day_fe_split_equipment_no_demand",
+            "title": "Separate Panels With Day FE and Split Equipment Congestion, No Demand Controls",
+            "description": (
+                "This version keeps the split congestion-versus-overload indicators and day fixed effects, "
+                "but removes the own-island and other-island demand controls."
+            ),
+            "include_day_fe": True,
+            "variable_specs": SPLIT_NO_DEMAND_VARIABLE_SPECS,
+            "split_equipment_terms": True,
+        },
+        {
+            "key": "without_day_fe",
+            "title": "Separate Panels Without Day FE",
+            "description": (
+                "This version estimates the same four separate panels without day fixed effects."
+            ),
+            "include_day_fe": False,
+            "variable_specs": BASE_VARIABLE_SPECS,
+            "split_equipment_terms": False,
+        },
+    ]
+
     sections: list[dict[str, object]] = []
     tidy_frames: list[pd.DataFrame] = []
-    for include_day_fe, section_key, section_title, description, variable_specs, split_equipment_terms in [
-        (
-            True,
-            "with_day_fe",
-            "Pooled Model With Day FE",
-            "This version uses common day fixed effects across the full sample and reports implied coefficients for the no-congestion and with-congestion regimes.",
-            BASE_VARIABLE_SPECS,
-            False,
-        ),
-        (
-            True,
-            "with_day_fe_split_congestion",
-            "Pooled Model With Day FE and Split Equipment Congestion",
-            "This version keeps common day fixed effects and separates each island's congestion effect into congested-and-overloaded versus congested-without-overload indicators before interacting them with the Luzon-Visayas link-congestion regime.",
-            SPLIT_VARIABLE_SPECS,
-            True,
-        ),
-        (
-            False,
-            "without_day_fe",
-            "Pooled Model Without Day FE",
-            "This version keeps the same pooled interaction structure but removes day fixed effects, so the regime-specific columns come from a pooled model without daily intercept controls.",
-            BASE_VARIABLE_SPECS,
-            False,
-        ),
-    ]:
+    for section_spec in section_specs:
         models = fit_models(
-            frame,
-            include_day_fe=include_day_fe,
-            section_key=section_key,
-            section_title=section_title,
-            variable_specs=variable_specs,
-            split_equipment_terms=split_equipment_terms,
+            frame=frame,
+            include_day_fe=bool(section_spec["include_day_fe"]),
+            section_key=str(section_spec["key"]),
+            section_title=str(section_spec["title"]),
+            variable_specs=list(section_spec["variable_specs"]),
+            split_equipment_terms=bool(section_spec["split_equipment_terms"]),
         )
-        display_specs = build_display_specs(models, variable_specs=variable_specs)
+        table = build_table(models, list(section_spec["variable_specs"]))
+        tidy_frames.append(build_tidy_rows(models, list(section_spec["variable_specs"])))
         sections.append(
             {
-                "title": section_title,
-                "description": description,
+                "title": section_spec["title"],
+                "description": section_spec["description"],
                 "models": models,
-                "table": build_table(display_specs),
+                "table": table,
             }
         )
-        tidy_frames.append(build_tidy_rows(display_specs))
+
     tidy = pd.concat(tidy_frames, ignore_index=True)
 
     output_html.parent.mkdir(parents=True, exist_ok=True)
