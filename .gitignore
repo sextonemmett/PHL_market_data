@@ -3,7 +3,28 @@ __pycache__/
 *.py[cod]
 .DS_Store
 
-data/
+data/**
+!data/
+!data/mp/
+!data/mp/combined/
+!data/mp/combined/*.parquet
+!data/mp_reserve/
+!data/mp_reserve/combined/
+!data/mp_reserve/combined/*.parquet
+!data/rtd/
+!data/rtd/combined/
+!data/rtd/combined/*.parquet
+!data/rtdcv/
+!data/rtdcv/combined/
+!data/rtdcv/combined/*.parquet
+!data/rtdhs/
+!data/rtdhs/combined/
+!data/rtdhs/combined/*.parquet
+!data/rtdreg/
+!data/rtdreg/combined/
+!data/rtdreg/combined/*.parquet
+!data/panels/
+!data/panels/*.parquet
 
 *.png
 *.csv
