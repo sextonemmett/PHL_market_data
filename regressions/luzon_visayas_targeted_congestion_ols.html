@@ -28,7 +28,7 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
 </head>
 <body>
   <h1>Luzon-Visayas Targeted Congestion OLS</h1>
-  <p class="lead">This report collects five targeted HC1-robust OLS regressions on the CLUZ-CVIS direct-pair sample, covering congested-sample price levels and uncongested-sample absolute price gaps.</p>
+  <p class="lead">This report collects targeted HC1-robust OLS regressions on the CLUZ-CVIS direct-pair sample, covering congested-sample price levels plus absolute price gaps in both uncongested and congested link states.</p>
 
   <section class="spec-card">
     <h2>Specification Summary</h2>
@@ -42,7 +42,7 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
     </div>
     <div class="formula-box">
       <div class="formula-label">Model Formulas</div>
-      <div class="formula"><strong>Luzon price ~ own_equip_cong | full sample</strong>: <code>price_1 ~ L_equip_cong</code><br><strong>Luzon price ~ own_equip_cong | link_cong == 1</strong>: <code>price_1 ~ L_equip_cong</code><br><strong>Vis price ~ own_equip_cong | link_cong == 1</strong>: <code>price_2 ~ V_equip_cong</code><br><strong>Vis price ~ equip_cong_no_overload + equip_cong_w_overload | link_cong == 1</strong>: <code>price_2 ~ V_equip_cong_no_overload + V_equip_cong_w_overload</code><br><strong>abs(price diff) ~ L_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ L_equip_cong</code><br><strong>abs(price diff) ~ V_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ V_equip_cong</code><br><strong>abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ L_equip_cong + V_equip_cong</code></div>
+      <div class="formula"><strong>Luzon price ~ own_equip_cong | full sample</strong>: <code>price_1 ~ L_equip_cong</code><br><strong>Luzon price ~ own_equip_cong | link_cong == 1</strong>: <code>price_1 ~ L_equip_cong</code><br><strong>Vis price ~ own_equip_cong | link_cong == 1</strong>: <code>price_2 ~ V_equip_cong</code><br><strong>Vis price ~ equip_cong_no_overload + equip_cong_w_overload | link_cong == 1</strong>: <code>price_2 ~ V_equip_cong_no_overload + V_equip_cong_w_overload</code><br><strong>abs(price diff) ~ L_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ L_equip_cong</code><br><strong>abs(price diff) ~ V_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ V_equip_cong</code><br><strong>abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ L_equip_cong + V_equip_cong</code><br><strong>abs(price diff) ~ L_equip_cong | link_cong == 1</strong>: <code>abs_price_diff ~ L_equip_cong</code><br><strong>abs(price diff) ~ V_equip_cong | link_cong == 1</strong>: <code>abs_price_diff ~ V_equip_cong</code><br><strong>abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 1</strong>: <code>abs_price_diff ~ L_equip_cong + V_equip_cong</code></div>
     </div>
     <table border="1" class="dataframe reg-table">
   <thead>
@@ -55,6 +55,9 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <th>abs(price diff) ~ L_equip_cong | link_cong == 0</th>
       <th>abs(price diff) ~ V_equip_cong | link_cong == 0</th>
       <th>abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 0</th>
+      <th>abs(price diff) ~ L_equip_cong | link_cong == 1</th>
+      <th>abs(price diff) ~ V_equip_cong | link_cong == 1</th>
+      <th>abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 1</th>
     </tr>
   </thead>
   <tbody>
@@ -67,6 +70,9 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td>0.3999<br>(0.2827)</td>
       <td>0.4150<br>(0.2794)</td>
       <td>0.4159<br>(0.2941)</td>
+      <td>5,182.3374***<br>(70.4726)</td>
+      <td>5,271.8149***<br>(75.5721)</td>
+      <td>5,199.0106***<br>(76.8389)</td>
     </tr>
     <tr>
       <td>L_equip_cong</td>
@@ -77,6 +83,9 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td>-0.0018<br>(0.4881)</td>
       <td></td>
       <td>-0.0173<br>(0.4945)</td>
+      <td>2,192.7411***<br>(403.3793)</td>
+      <td></td>
+      <td>2,177.3041***<br>(404.4425)</td>
     </tr>
     <tr>
       <td>V_equip_cong</td>
@@ -87,6 +96,9 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td></td>
       <td>-0.4150<br>(0.2794)</td>
       <td>-0.4159<br>(0.2935)</td>
+      <td></td>
+      <td>-168.2309<br>(191.8578)</td>
+      <td>-100.1292<br>(192.2611)</td>
     </tr>
     <tr>
       <td>V_equip_cong_no_overload</td>
@@ -94,6 +106,9 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td></td>
       <td></td>
       <td>8,469.7098***<br>(1,576.9287)</td>
+      <td></td>
+      <td></td>
+      <td></td>
       <td></td>
       <td></td>
       <td></td>
@@ -107,6 +122,9 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td></td>
       <td></td>
       <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
     </tr>
     <tr>
       <td>Observations</td>
@@ -117,6 +135,9 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td>14,752</td>
       <td>14,752</td>
       <td>14,752</td>
+      <td>11,422</td>
+      <td>11,422</td>
+      <td>11,422</td>
     </tr>
     <tr>
       <td>R²</td>
@@ -127,6 +148,9 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td>0.000</td>
       <td>0.000</td>
       <td>0.000</td>
+      <td>0.002</td>
+      <td>0.000</td>
+      <td>0.002</td>
     </tr>
     <tr>
       <td>Dependent variable</td>
@@ -134,6 +158,9 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td>Luzon price</td>
       <td>Visayas price</td>
       <td>Visayas price</td>
+      <td>|Luzon price - Visayas price|</td>
+      <td>|Luzon price - Visayas price|</td>
+      <td>|Luzon price - Visayas price|</td>
       <td>|Luzon price - Visayas price|</td>
       <td>|Luzon price - Visayas price|</td>
       <td>|Luzon price - Visayas price|</td>
@@ -147,9 +174,15 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td>link_cong == 0</td>
       <td>link_cong == 0</td>
       <td>link_cong == 0</td>
+      <td>link_cong == 1</td>
+      <td>link_cong == 1</td>
+      <td>link_cong == 1</td>
     </tr>
     <tr>
       <td>Robust SE</td>
+      <td>HC1</td>
+      <td>HC1</td>
+      <td>HC1</td>
       <td>HC1</td>
       <td>HC1</td>
       <td>HC1</td>
@@ -165,7 +198,7 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
   <div class="notes">
     <p>The first Luzon-price regression uses the full CLUZ-CVIS sample.</p>
     <p>The next two price-level regressions use the congested subsample where <code>link_cong == 1</code>.</p>
-    <p>The three absolute-gap regressions use the uncongested subsample where <code>link_cong == 0</code>.</p>
+    <p>Three absolute-gap regressions use the uncongested subsample where <code>link_cong == 0</code>, and three parallel absolute-gap regressions use the congested subsample where <code>link_cong == 1</code>.</p>
     <p>For the CLUZ-CVIS pair, <code>L_equip_cong</code> maps to Luzon equipment congestion and <code>V_equip_cong</code> maps to Visayas equipment congestion.</p>
     <p>Significance stars: <code>* p&lt;0.10</code>, <code>** p&lt;0.05</code>, <code>*** p&lt;0.01</code>.</p>
     <p>Tidy coefficient export: <code>regressions/luzon_visayas_targeted_congestion_ols_coefficients.csv</code></p>

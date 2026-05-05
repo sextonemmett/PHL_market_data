@@ -150,6 +150,30 @@ def fit_models(frame: pd.DataFrame) -> list[dict[str, object]]:
             "rhs_terms": ["L_equip_cong", "V_equip_cong"],
             "dependent_label": "|Luzon price - Visayas price|",
         },
+        {
+            "title": "abs(price diff) ~ L_equip_cong | link_cong == 1",
+            "dep_var": "abs_price_diff",
+            "sample_filter": "link_cong == 1",
+            "sample_value": 1,
+            "rhs_terms": ["L_equip_cong"],
+            "dependent_label": "|Luzon price - Visayas price|",
+        },
+        {
+            "title": "abs(price diff) ~ V_equip_cong | link_cong == 1",
+            "dep_var": "abs_price_diff",
+            "sample_filter": "link_cong == 1",
+            "sample_value": 1,
+            "rhs_terms": ["V_equip_cong"],
+            "dependent_label": "|Luzon price - Visayas price|",
+        },
+        {
+            "title": "abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 1",
+            "dep_var": "abs_price_diff",
+            "sample_filter": "link_cong == 1",
+            "sample_value": 1,
+            "rhs_terms": ["L_equip_cong", "V_equip_cong"],
+            "dependent_label": "|Luzon price - Visayas price|",
+        },
     ]
 
     fitted: list[dict[str, object]] = []
@@ -278,7 +302,7 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
 </head>
 <body>
   <h1>Luzon-Visayas Targeted Congestion OLS</h1>
-  <p class="lead">This report collects five targeted HC1-robust OLS regressions on the CLUZ-CVIS direct-pair sample, covering congested-sample price levels and uncongested-sample absolute price gaps.</p>
+  <p class="lead">This report collects targeted HC1-robust OLS regressions on the CLUZ-CVIS direct-pair sample, covering congested-sample price levels plus absolute price gaps in both uncongested and congested link states.</p>
 
   <section class="spec-card">
     <h2>Specification Summary</h2>
@@ -300,7 +324,7 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
   <div class="notes">
     <p>The first Luzon-price regression uses the full CLUZ-CVIS sample.</p>
     <p>The next two price-level regressions use the congested subsample where <code>link_cong == 1</code>.</p>
-    <p>The three absolute-gap regressions use the uncongested subsample where <code>link_cong == 0</code>.</p>
+    <p>Three absolute-gap regressions use the uncongested subsample where <code>link_cong == 0</code>, and three parallel absolute-gap regressions use the congested subsample where <code>link_cong == 1</code>.</p>
     <p>For the CLUZ-CVIS pair, <code>L_equip_cong</code> maps to Luzon equipment congestion and <code>V_equip_cong</code> maps to Visayas equipment congestion.</p>
     <p>Significance stars: <code>* p&lt;0.10</code>, <code>** p&lt;0.05</code>, <code>*** p&lt;0.01</code>.</p>
     <p>Tidy coefficient export: <code>{html.escape(str(output_csv))}</code></p>
