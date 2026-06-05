@@ -133,6 +133,14 @@ figcaption {
   margin: 14px 0 6px;
   font-size: 13.5px;
 }
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+.target-table {
+  min-width: 1320px;
+  font-size: 12.5px;
+}
 .reg-table th, .compact-table th, .target-table th {
   background: #16384f;
   color: #ffffff;
@@ -152,9 +160,7 @@ figcaption {
   font-weight: 600;
   color: #132f42;
 }
-.target-table td:first-child {
-  min-width: 330px;
-}
+.target-table td:first-child { min-width: 210px; }
 .se {
   color: var(--muted);
 }
@@ -966,149 +972,218 @@ figcaption {
 <div><span class="meta-label">Sample construction</span><span>Full sample, link-congested intervals only, or link-uncongested intervals only</span></div>
 <div><span class="meta-label">Congestion construction</span><span>Equipment-congestion indicators identify whether Luzon or Visayas has equipment congestion; Visayas congestion is also split by overload status in one model</span></div>
 <div><span class="meta-label">Fixed effects</span><span><strong>None in every targeted model.</strong></span></div></div>
-    <table border="1" class="dataframe target-table">
+    <div class="table-scroll">
+      <table border="1" class="dataframe target-table">
   <thead>
     <tr style="text-align: right;">
-      <th>Model</th>
       <th>Regressor</th>
-      <th>Sample</th>
-      <th>Dependent variable</th>
-      <th>Fixed effects</th>
-      <th>Estimate</th>
-      <th>Observations</th>
-      <th>R-squared</th>
+      <th>(1)</th>
+      <th>(2)</th>
+      <th>(3)</th>
+      <th>(4)</th>
+      <th>(5)</th>
+      <th>(6)</th>
+      <th>(7)</th>
+      <th>(8)</th>
+      <th>(9)</th>
+      <th>(10)</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>Luzon price on Luzon equipment congestion, all intervals</td>
+      <td>Constant</td>
+      <td>3,228.95***<br><span class="se">(19.52)</span></td>
+      <td>2,972.40***<br><span class="se">(28.22)</span></td>
+      <td>7,094.53***<br><span class="se">(90.56)</span></td>
+      <td>7,094.53***<br><span class="se">(90.57)</span></td>
+      <td>0.40<br><span class="se">(0.28)</span></td>
+      <td>0.41<br><span class="se">(0.28)</span></td>
+      <td>0.42<br><span class="se">(0.29)</span></td>
+      <td>5,182.34***<br><span class="se">(70.47)</span></td>
+      <td>5,271.81***<br><span class="se">(75.57)</span></td>
+      <td>5,198.72***<br><span class="se">(76.84)</span></td>
+    </tr>
+    <tr>
       <td>Luzon equipment congested</td>
-      <td>All Luzon-Visayas intervals</td>
-      <td>Luzon price</td>
-      <td>None</td>
       <td>2,158.85***<br><span class="se">(143.45)</span></td>
-      <td>26,174</td>
-      <td>0.018</td>
-    </tr>
-    <tr>
-      <td>Luzon price on Luzon equipment congestion, link-congested intervals</td>
-      <td>Luzon equipment congested</td>
-      <td>Luzon-Visayas link-congested intervals only</td>
-      <td>Luzon price</td>
-      <td>None</td>
       <td>3,411.00***<br><span class="se">(222.16)</span></td>
-      <td>11,422</td>
-      <td>0.034</td>
-    </tr>
-    <tr>
-      <td>Visayas price on Visayas equipment congestion, link-congested intervals</td>
-      <td>Visayas equipment congested</td>
-      <td>Luzon-Visayas link-congested intervals only</td>
-      <td>Visayas price</td>
-      <td>None</td>
-      <td>149.02<br><span class="se">(211.66)</span></td>
-      <td>11,422</td>
-      <td>0.000</td>
-    </tr>
-    <tr>
-      <td>Visayas price on Visayas congestion with and without overload, link-congested intervals</td>
-      <td>Visayas equipment congested, no overload</td>
-      <td>Luzon-Visayas link-congested intervals only</td>
-      <td>Visayas price</td>
-      <td>None</td>
-      <td>8,469.71***<br><span class="se">(1,576.93)</span></td>
-      <td>11,422</td>
-      <td>0.012</td>
-    </tr>
-    <tr>
-      <td>Visayas price on Visayas congestion with and without overload, link-congested intervals</td>
-      <td>Visayas equipment congested, with overload</td>
-      <td>Luzon-Visayas link-congested intervals only</td>
-      <td>Visayas price</td>
-      <td>None</td>
-      <td>-510.43***<br><span class="se">(178.37)</span></td>
-      <td>11,422</td>
-      <td>0.012</td>
-    </tr>
-    <tr>
-      <td>Absolute Luzon-Visayas price gap on Luzon equipment congestion, link-uncongested intervals</td>
-      <td>Luzon equipment congested</td>
-      <td>Luzon-Visayas link-uncongested intervals only</td>
-      <td>|Luzon price - Visayas price|</td>
-      <td>None</td>
+      <td></td>
+      <td></td>
       <td>-0.00<br><span class="se">(0.49)</span></td>
-      <td>14,752</td>
-      <td>0.000</td>
-    </tr>
-    <tr>
-      <td>Absolute Luzon-Visayas price gap on Visayas equipment congestion, link-uncongested intervals</td>
-      <td>Visayas equipment congested</td>
-      <td>Luzon-Visayas link-uncongested intervals only</td>
-      <td>|Luzon price - Visayas price|</td>
-      <td>None</td>
-      <td>-0.41<br><span class="se">(0.28)</span></td>
-      <td>14,752</td>
-      <td>0.000</td>
-    </tr>
-    <tr>
-      <td>Absolute Luzon-Visayas price gap on both island congestion indicators, link-uncongested intervals</td>
-      <td>Luzon equipment congested</td>
-      <td>Luzon-Visayas link-uncongested intervals only</td>
-      <td>|Luzon price - Visayas price|</td>
-      <td>None</td>
+      <td></td>
       <td>-0.02<br><span class="se">(0.49)</span></td>
-      <td>14,752</td>
-      <td>0.000</td>
-    </tr>
-    <tr>
-      <td>Absolute Luzon-Visayas price gap on both island congestion indicators, link-uncongested intervals</td>
-      <td>Visayas equipment congested</td>
-      <td>Luzon-Visayas link-uncongested intervals only</td>
-      <td>|Luzon price - Visayas price|</td>
-      <td>None</td>
-      <td>-0.42<br><span class="se">(0.29)</span></td>
-      <td>14,752</td>
-      <td>0.000</td>
-    </tr>
-    <tr>
-      <td>Absolute Luzon-Visayas price gap on Luzon equipment congestion, link-congested intervals</td>
-      <td>Luzon equipment congested</td>
-      <td>Luzon-Visayas link-congested intervals only</td>
-      <td>|Luzon price - Visayas price|</td>
-      <td>None</td>
       <td>2,192.74***<br><span class="se">(403.38)</span></td>
-      <td>11,422</td>
-      <td>0.002</td>
+      <td></td>
+      <td>2,186.03***<br><span class="se">(404.66)</span></td>
     </tr>
     <tr>
-      <td>Absolute Luzon-Visayas price gap on Visayas equipment congestion, link-congested intervals</td>
       <td>Visayas equipment congested</td>
-      <td>Luzon-Visayas link-congested intervals only</td>
-      <td>|Luzon price - Visayas price|</td>
-      <td>None</td>
+      <td></td>
+      <td></td>
+      <td>149.02<br><span class="se">(211.66)</span></td>
+      <td></td>
+      <td></td>
+      <td>-0.41<br><span class="se">(0.28)</span></td>
+      <td></td>
+      <td></td>
       <td>-168.23<br><span class="se">(191.86)</span></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Visayas equipment congested, no overload</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>8,469.71***<br><span class="se">(1,576.93)</span></td>
+      <td></td>
+      <td></td>
+      <td>-0.42<br><span class="se">(0.28)</span></td>
+      <td></td>
+      <td></td>
+      <td>8,524.86***<br><span class="se">(1,425.66)</span></td>
+    </tr>
+    <tr>
+      <td>Visayas equipment congested, with overload</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>-510.43***<br><span class="se">(178.37)</span></td>
+      <td></td>
+      <td></td>
+      <td>-0.42<br><span class="se">(0.29)</span></td>
+      <td></td>
+      <td></td>
+      <td>-783.40***<br><span class="se">(160.20)</span></td>
+    </tr>
+    <tr>
+      <td>Dependent variable</td>
+      <td>Luzon price</td>
+      <td>Luzon price</td>
+      <td>Visayas price</td>
+      <td>Visayas price</td>
+      <td>|Luzon price - Visayas price|</td>
+      <td>|Luzon price - Visayas price|</td>
+      <td>|Luzon price - Visayas price|</td>
+      <td>|Luzon price - Visayas price|</td>
+      <td>|Luzon price - Visayas price|</td>
+      <td>|Luzon price - Visayas price|</td>
+    </tr>
+    <tr>
+      <td>Sample</td>
+      <td>All Luzon-Visayas intervals</td>
+      <td>Luzon-Visayas link-congested intervals only</td>
+      <td>Luzon-Visayas link-congested intervals only</td>
+      <td>Luzon-Visayas link-congested intervals only</td>
+      <td>Luzon-Visayas link-uncongested intervals only</td>
+      <td>Luzon-Visayas link-uncongested intervals only</td>
+      <td>Luzon-Visayas link-uncongested intervals only</td>
+      <td>Luzon-Visayas link-congested intervals only</td>
+      <td>Luzon-Visayas link-congested intervals only</td>
+      <td>Luzon-Visayas link-congested intervals only</td>
+    </tr>
+    <tr>
+      <td>Fixed effects</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Observations</td>
+      <td>26,174</td>
       <td>11,422</td>
+      <td>11,422</td>
+      <td>11,422</td>
+      <td>14,752</td>
+      <td>14,752</td>
+      <td>14,752</td>
+      <td>11,422</td>
+      <td>11,422</td>
+      <td>11,422</td>
+    </tr>
+    <tr>
+      <td>R-squared</td>
+      <td>0.018</td>
+      <td>0.034</td>
       <td>0.000</td>
+      <td>0.012</td>
+      <td>0.000</td>
+      <td>0.000</td>
+      <td>0.000</td>
+      <td>0.002</td>
+      <td>0.000</td>
+      <td>0.020</td>
     </tr>
     <tr>
-      <td>Absolute Luzon-Visayas price gap on both island congestion indicators, link-congested intervals</td>
-      <td>Luzon equipment congested</td>
-      <td>Luzon-Visayas link-congested intervals only</td>
-      <td>|Luzon price - Visayas price|</td>
-      <td>None</td>
-      <td>2,177.30***<br><span class="se">(404.44)</span></td>
-      <td>11,422</td>
-      <td>0.002</td>
+      <td>Standard errors</td>
+      <td>HC1 robust</td>
+      <td>HC1 robust</td>
+      <td>HC1 robust</td>
+      <td>HC1 robust</td>
+      <td>HC1 robust</td>
+      <td>HC1 robust</td>
+      <td>HC1 robust</td>
+      <td>HC1 robust</td>
+      <td>HC1 robust</td>
+      <td>HC1 robust</td>
+    </tr>
+  </tbody>
+</table>
+    </div>
+    <h3>Column Definitions</h3>
+    <table border="1" class="dataframe compact-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Column</th>
+      <th>Model</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>(1)</td>
+      <td>Luzon price on Luzon equipment congestion, all intervals</td>
     </tr>
     <tr>
-      <td>Absolute Luzon-Visayas price gap on both island congestion indicators, link-congested intervals</td>
-      <td>Visayas equipment congested</td>
-      <td>Luzon-Visayas link-congested intervals only</td>
-      <td>|Luzon price - Visayas price|</td>
-      <td>None</td>
-      <td>-100.13<br><span class="se">(192.26)</span></td>
-      <td>11,422</td>
-      <td>0.002</td>
+      <td>(2)</td>
+      <td>Luzon price on Luzon equipment congestion, link-congested intervals</td>
+    </tr>
+    <tr>
+      <td>(3)</td>
+      <td>Visayas price on Visayas equipment congestion, link-congested intervals</td>
+    </tr>
+    <tr>
+      <td>(4)</td>
+      <td>Visayas price on Visayas congestion with and without overload, link-congested intervals</td>
+    </tr>
+    <tr>
+      <td>(5)</td>
+      <td>Absolute Luzon-Visayas price gap on Luzon equipment congestion, link-uncongested intervals</td>
+    </tr>
+    <tr>
+      <td>(6)</td>
+      <td>Absolute Luzon-Visayas price gap on Visayas equipment congestion, link-uncongested intervals</td>
+    </tr>
+    <tr>
+      <td>(7)</td>
+      <td>Absolute Luzon-Visayas price gap on Luzon congestion and split Visayas congestion, link-uncongested intervals</td>
+    </tr>
+    <tr>
+      <td>(8)</td>
+      <td>Absolute Luzon-Visayas price gap on Luzon equipment congestion, link-congested intervals</td>
+    </tr>
+    <tr>
+      <td>(9)</td>
+      <td>Absolute Luzon-Visayas price gap on Visayas equipment congestion, link-congested intervals</td>
+    </tr>
+    <tr>
+      <td>(10)</td>
+      <td>Absolute Luzon-Visayas price gap on Luzon congestion and split Visayas congestion, link-congested intervals</td>
     </tr>
   </tbody>
 </table>

@@ -61,6 +61,9 @@ TARGETED_MODEL_LABELS = {
     "abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 0": (
         "Absolute Luzon-Visayas price gap on both island congestion indicators, link-uncongested intervals"
     ),
+    "abs(price diff) ~ L_equip_cong + V_equip_cong_no_overload + V_equip_cong_w_overload | link_cong == 0": (
+        "Absolute Luzon-Visayas price gap on Luzon congestion and split Visayas congestion, link-uncongested intervals"
+    ),
     "abs(price diff) ~ L_equip_cong | link_cong == 1": (
         "Absolute Luzon-Visayas price gap on Luzon equipment congestion, link-congested intervals"
     ),
@@ -69,6 +72,9 @@ TARGETED_MODEL_LABELS = {
     ),
     "abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 1": (
         "Absolute Luzon-Visayas price gap on both island congestion indicators, link-congested intervals"
+    ),
+    "abs(price diff) ~ L_equip_cong + V_equip_cong_no_overload + V_equip_cong_w_overload | link_cong == 1": (
+        "Absolute Luzon-Visayas price gap on Luzon congestion and split Visayas congestion, link-congested intervals"
     ),
 }
 
@@ -427,22 +433,63 @@ def targeted_term_label(term: str) -> str:
     return TERM_LABELS.get(term, term)
 
 
+def targeted_wide_table(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    model_order = frame["model"].drop_duplicates().tolist()
+    model_columns = {model: f"({index})" for index, model in enumerate(model_order, start=1)}
+    term_order = [
+        "Intercept",
+        "L_equip_cong",
+        "V_equip_cong",
+        "V_equip_cong_no_overload",
+        "V_equip_cong_w_overload",
+    ]
+    rows: list[dict[str, str]] = []
+    for term in term_order:
+        row = {"Regressor": html.escape(targeted_term_label(term))}
+        for model in model_order:
+            subset = frame.loc[(frame["model"] == model) & (frame["term"] == term)]
+            if subset.empty:
+                row[model_columns[model]] = ""
+            else:
+                value = subset.iloc[0]
+                row[model_columns[model]] = estimate_cell(
+                    float(value["coef"]),
+                    float(value["std_err"]),
+                    float(value["pvalue"]),
+                )
+        rows.append(row)
+
+    stat_rows = [
+        ("Dependent variable", lambda value: html.escape(str(value["dependent_variable"]))),
+        ("Sample", lambda value: html.escape(SAMPLE_LABELS.get(str(value["sample_filter"]), str(value["sample_filter"])))),
+        ("Fixed effects", lambda value: "None"),
+        ("Observations", lambda value: fmt_int(float(value["nobs"]))),
+        ("R-squared", lambda value: fmt(float(value["r_squared"]), 3)),
+        ("Standard errors", lambda value: "HC1 robust"),
+    ]
+    for label, value_fn in stat_rows:
+        row = {"Regressor": label}
+        for model in model_order:
+            first = frame.loc[frame["model"] == model].iloc[0]
+            row[model_columns[model]] = value_fn(first)
+        rows.append(row)
+
+    definitions = pd.DataFrame(
+        [
+            {
+                "Column": model_columns[model],
+                "Model": html.escape(TARGETED_MODEL_LABELS.get(str(model), str(model))),
+            }
+            for model in model_order
+        ]
+    )
+    wide = pd.DataFrame(rows, columns=["Regressor", *[model_columns[model] for model in model_order]])
+    return wide, definitions
+
+
 def build_targeted_section(path: Path) -> str:
     frame = pd.read_csv(path)
-    rows: list[dict[str, str]] = []
-    for _, row in frame.loc[frame["term"] != "Intercept"].iterrows():
-        rows.append(
-            {
-                "Model": html.escape(TARGETED_MODEL_LABELS.get(str(row["model"]), str(row["model"]))),
-                "Regressor": html.escape(targeted_term_label(str(row["term"]))),
-                "Sample": html.escape(SAMPLE_LABELS.get(str(row["sample_filter"]), str(row["sample_filter"]))),
-                "Dependent variable": html.escape(str(row["dependent_variable"])),
-                "Fixed effects": "None",
-                "Estimate": estimate_cell(float(row["coef"]), float(row["std_err"]), float(row["pvalue"])),
-                "Observations": fmt_int(float(row["nobs"])),
-                "R-squared": fmt(float(row["r_squared"]), 3),
-            }
-        )
+    wide, definitions = targeted_wide_table(frame)
 
     body = f"""
     <p class="plain">These narrower checks isolate specific Luzon-Visayas congestion questions. They are intentionally sparse: each regression uses only the listed congestion indicator or indicators and no fixed effects. That makes them useful as transparent diagnostic contrasts against the richer price-level and direct-gap specifications above.</p>
@@ -453,7 +500,11 @@ def build_targeted_section(path: Path) -> str:
         ("Congestion construction", "Equipment-congestion indicators identify whether Luzon or Visayas has equipment congestion; Visayas congestion is also split by overload status in one model"),
         ("Fixed effects", "<strong>None in every targeted model.</strong>"),
     ])}
-    {html_table(pd.DataFrame(rows), "target-table")}
+    <div class="table-scroll">
+      {html_table(wide, "target-table")}
+    </div>
+    <h3>Column Definitions</h3>
+    {html_table(definitions, "compact-table")}
 """
     return section("5. Targeted Luzon-Visayas Congestion Checks", body, "targeted")
 
@@ -595,6 +646,14 @@ figcaption {
   margin: 14px 0 6px;
   font-size: 13.5px;
 }
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+.target-table {
+  min-width: 1320px;
+  font-size: 12.5px;
+}
 .reg-table th, .compact-table th, .target-table th {
   background: #16384f;
   color: #ffffff;
@@ -614,9 +673,7 @@ figcaption {
   font-weight: 600;
   color: #132f42;
 }
-.target-table td:first-child {
-  min-width: 330px;
-}
+.target-table td:first-child { min-width: 210px; }
 .se {
   color: var(--muted);
 }

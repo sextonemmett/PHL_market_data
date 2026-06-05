@@ -143,11 +143,14 @@ def fit_models(frame: pd.DataFrame) -> list[dict[str, object]]:
             "dependent_label": "|Luzon price - Visayas price|",
         },
         {
-            "title": "abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 0",
+            "title": (
+                "abs(price diff) ~ L_equip_cong + V_equip_cong_no_overload "
+                "+ V_equip_cong_w_overload | link_cong == 0"
+            ),
             "dep_var": "abs_price_diff",
             "sample_filter": "link_cong == 0",
             "sample_value": 0,
-            "rhs_terms": ["L_equip_cong", "V_equip_cong"],
+            "rhs_terms": ["L_equip_cong", "V_equip_cong_no_overload", "V_equip_cong_w_overload"],
             "dependent_label": "|Luzon price - Visayas price|",
         },
         {
@@ -167,11 +170,14 @@ def fit_models(frame: pd.DataFrame) -> list[dict[str, object]]:
             "dependent_label": "|Luzon price - Visayas price|",
         },
         {
-            "title": "abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 1",
+            "title": (
+                "abs(price diff) ~ L_equip_cong + V_equip_cong_no_overload "
+                "+ V_equip_cong_w_overload | link_cong == 1"
+            ),
             "dep_var": "abs_price_diff",
             "sample_filter": "link_cong == 1",
             "sample_value": 1,
-            "rhs_terms": ["L_equip_cong", "V_equip_cong"],
+            "rhs_terms": ["L_equip_cong", "V_equip_cong_no_overload", "V_equip_cong_w_overload"],
             "dependent_label": "|Luzon price - Visayas price|",
         },
     ]

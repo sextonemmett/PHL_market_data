@@ -42,7 +42,7 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
     </div>
     <div class="formula-box">
       <div class="formula-label">Model Formulas</div>
-      <div class="formula"><strong>Luzon price ~ own_equip_cong | full sample</strong>: <code>price_1 ~ L_equip_cong</code><br><strong>Luzon price ~ own_equip_cong | link_cong == 1</strong>: <code>price_1 ~ L_equip_cong</code><br><strong>Vis price ~ own_equip_cong | link_cong == 1</strong>: <code>price_2 ~ V_equip_cong</code><br><strong>Vis price ~ equip_cong_no_overload + equip_cong_w_overload | link_cong == 1</strong>: <code>price_2 ~ V_equip_cong_no_overload + V_equip_cong_w_overload</code><br><strong>abs(price diff) ~ L_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ L_equip_cong</code><br><strong>abs(price diff) ~ V_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ V_equip_cong</code><br><strong>abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ L_equip_cong + V_equip_cong</code><br><strong>abs(price diff) ~ L_equip_cong | link_cong == 1</strong>: <code>abs_price_diff ~ L_equip_cong</code><br><strong>abs(price diff) ~ V_equip_cong | link_cong == 1</strong>: <code>abs_price_diff ~ V_equip_cong</code><br><strong>abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 1</strong>: <code>abs_price_diff ~ L_equip_cong + V_equip_cong</code></div>
+      <div class="formula"><strong>Luzon price ~ own_equip_cong | full sample</strong>: <code>price_1 ~ L_equip_cong</code><br><strong>Luzon price ~ own_equip_cong | link_cong == 1</strong>: <code>price_1 ~ L_equip_cong</code><br><strong>Vis price ~ own_equip_cong | link_cong == 1</strong>: <code>price_2 ~ V_equip_cong</code><br><strong>Vis price ~ equip_cong_no_overload + equip_cong_w_overload | link_cong == 1</strong>: <code>price_2 ~ V_equip_cong_no_overload + V_equip_cong_w_overload</code><br><strong>abs(price diff) ~ L_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ L_equip_cong</code><br><strong>abs(price diff) ~ V_equip_cong | link_cong == 0</strong>: <code>abs_price_diff ~ V_equip_cong</code><br><strong>abs(price diff) ~ L_equip_cong + V_equip_cong_no_overload + V_equip_cong_w_overload | link_cong == 0</strong>: <code>abs_price_diff ~ L_equip_cong + V_equip_cong_no_overload + V_equip_cong_w_overload</code><br><strong>abs(price diff) ~ L_equip_cong | link_cong == 1</strong>: <code>abs_price_diff ~ L_equip_cong</code><br><strong>abs(price diff) ~ V_equip_cong | link_cong == 1</strong>: <code>abs_price_diff ~ V_equip_cong</code><br><strong>abs(price diff) ~ L_equip_cong + V_equip_cong_no_overload + V_equip_cong_w_overload | link_cong == 1</strong>: <code>abs_price_diff ~ L_equip_cong + V_equip_cong_no_overload + V_equip_cong_w_overload</code></div>
     </div>
     <table border="1" class="dataframe reg-table">
   <thead>
@@ -54,10 +54,10 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <th>Vis price ~ equip_cong_no_overload + equip_cong_w_overload | link_cong == 1</th>
       <th>abs(price diff) ~ L_equip_cong | link_cong == 0</th>
       <th>abs(price diff) ~ V_equip_cong | link_cong == 0</th>
-      <th>abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 0</th>
+      <th>abs(price diff) ~ L_equip_cong + V_equip_cong_no_overload + V_equip_cong_w_overload | link_cong == 0</th>
       <th>abs(price diff) ~ L_equip_cong | link_cong == 1</th>
       <th>abs(price diff) ~ V_equip_cong | link_cong == 1</th>
-      <th>abs(price diff) ~ L_equip_cong + V_equip_cong | link_cong == 1</th>
+      <th>abs(price diff) ~ L_equip_cong + V_equip_cong_no_overload + V_equip_cong_w_overload | link_cong == 1</th>
     </tr>
   </thead>
   <tbody>
@@ -72,7 +72,7 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td>0.4159<br>(0.2941)</td>
       <td>5,182.3374***<br>(70.4726)</td>
       <td>5,271.8149***<br>(75.5721)</td>
-      <td>5,199.0106***<br>(76.8389)</td>
+      <td>5,198.7188***<br>(76.8434)</td>
     </tr>
     <tr>
       <td>L_equip_cong</td>
@@ -85,7 +85,7 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td>-0.0173<br>(0.4945)</td>
       <td>2,192.7411***<br>(403.3793)</td>
       <td></td>
-      <td>2,177.3041***<br>(404.4425)</td>
+      <td>2,186.0313***<br>(404.6560)</td>
     </tr>
     <tr>
       <td>V_equip_cong</td>
@@ -95,10 +95,10 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td></td>
       <td></td>
       <td>-0.4150<br>(0.2794)</td>
-      <td>-0.4159<br>(0.2935)</td>
+      <td></td>
       <td></td>
       <td>-168.2309<br>(191.8578)</td>
-      <td>-100.1292<br>(192.2611)</td>
+      <td></td>
     </tr>
     <tr>
       <td>V_equip_cong_no_overload</td>
@@ -108,10 +108,10 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td>8,469.7098***<br>(1,576.9287)</td>
       <td></td>
       <td></td>
+      <td>-0.4152<br>(0.2828)</td>
       <td></td>
       <td></td>
-      <td></td>
-      <td></td>
+      <td>8,524.8590***<br>(1,425.6579)</td>
     </tr>
     <tr>
       <td>V_equip_cong_w_overload</td>
@@ -121,10 +121,10 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td>-510.4308***<br>(178.3676)</td>
       <td></td>
       <td></td>
+      <td>-0.4159<br>(0.2941)</td>
       <td></td>
       <td></td>
-      <td></td>
-      <td></td>
+      <td>-783.4000***<br>(160.1956)</td>
     </tr>
     <tr>
       <td>Observations</td>
@@ -150,7 +150,7 @@ code { background: #dde7f0; color: #0b1f33; padding: 2px 5px; border-radius: 4px
       <td>0.000</td>
       <td>0.002</td>
       <td>0.000</td>
-      <td>0.002</td>
+      <td>0.020</td>
     </tr>
     <tr>
       <td>Dependent variable</td>
